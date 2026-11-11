@@ -173,6 +173,22 @@ class TestEnsembleClassifier(unittest.TestCase):
         self.assertEqual(preds.iloc[2]["sentiment"], "negative")
         self.assertEqual(preds.iloc[3]["sentiment"], "negative")
 
+    def test_strong_positive_override(self):
+        """Проверка оверрайдов для сильных позитивных маркеров (Milestone 11.2)."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        test_msgs = [
+            "Сочная, обалденная рыбка!",
+            "Милота какая)",
+            "Поздравляю всех с праздником!",
+            "Спасибо неравнодушные соседи!",
+        ]
+        preds = ensemble.predict(test_msgs)
+        for i in range(len(test_msgs)):
+            self.assertEqual(preds.iloc[i]["sentiment"], "positive")
+            self.assertEqual(preds.iloc[i]["aggression"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

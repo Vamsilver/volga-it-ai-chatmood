@@ -93,6 +93,14 @@ SARCASM_STRONG_PATTERNS = [
 STANDALONE_NEG_EMOJIS = re.compile(r"^[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱\s!]+$")
 STANDALONE_POS_EMOJIS = re.compile(r"^[👍🙏👌👏🎉🌸❤️😀😁😃🤝\s!]+$")
 
+# Сильные маркеры явного позитива (преодоление недооценки редкого класса)
+STRONG_POSITIVE_PATTERNS = [
+    re.compile(r"\b(?:обалденн[а-яё]*|вкусн[а-яё]*|милот[а-яё]*|прекрасн[а-яё]*|замечательн[а-яё]*|поздравл[а-яё]*|ура[!.]*)\b", re.IGNORECASE),
+    re.compile(r"\b(?:красот[а-яё]+|сочн[а-яё]+|аппетитн[а-яё]*|восхитительн[а-яё]*)\b", re.IGNORECASE),
+    re.compile(r"\b(?:бог\s+в\s+помощь|рад[аы]\s+за\s+вас|на\s+вашей\s+стороне|уважени[ея]\s+к\s+соседям|без\s+проблем|с\s+удовольствием|всегда\s+пожалуйста)\b", re.IGNORECASE),
+    re.compile(r"спасибо\s+неравнодушн", re.IGNORECASE),
+]
+
 
 class EnsembleClassifier:
     """Ансамбль классификаторов с взвешенным голосованием и обработкой хардкейсов."""
@@ -278,17 +286,10 @@ class EnsembleClassifier:
 
         # Hard-rule overrides: прямые оскорбления, угрозы, сарказм и автономные эмодзи
         for i, text in enumerate(texts):
-            if pred_svc[i] == 0:
-                t = str(text).strip() if pd.notna(text) else ""
-                if any(p.search(t) for p in INSULT_OVERRIDE_PATTERNS):
-                    pred_sent[i] = "negative"
-                    pred_agg[i] = 1
-                elif STANDALONE_NEG_EMOJIS.match(t):
-                    pred_sent[i] = "negative"
-                elif STANDALONE_POS_EMOJIS.match(t):
-                    pred_sent[i] = "positive"
-                elif any(p.search(t) for p in SARCASM_STRONG_PATTERNS):
-                    pred_sent[i] = "negative"
+            if pred_svc[i] == 1:
+                continue
+            t = str(text).strip() if pd.notna(text) else ""
+            pred_sent[i], pred_agg[i] = self._override_resident_sentiment(t, pred_sent[i], pred_agg[i])
 
         # Соблюдение жестких инвариантов разметки
         pred_sent, pred_agg = self._apply_invariants(pred_svc, pred_sent, pred_agg)
@@ -298,6 +299,25 @@ class EnsembleClassifier:
             "sentiment": pred_sent,
             "aggression": pred_agg,
         })
+
+    @staticmethod
+    def _override_resident_sentiment(text: str, sent: str, agg: int) -> tuple[str, int]:
+        """Применение семантических оверрайдов для сообщений жителей."""
+        if not text:
+            return sent, agg
+
+        if any(p.search(text) for p in INSULT_OVERRIDE_PATTERNS):
+            return "negative", 1
+        if STANDALONE_NEG_EMOJIS.match(text):
+            return "negative", agg
+        if STANDALONE_POS_EMOJIS.match(text):
+            return "positive", 0
+        if any(p.search(text) for p in SARCASM_STRONG_PATTERNS):
+            return "negative", agg
+        if any(p.search(text) for p in STRONG_POSITIVE_PATTERNS) and not any(p.search(text) for p in SARCASM_STRONG_PATTERNS):
+            return "positive", 0
+
+        return sent, agg
 
     def predict_messages(self, messages_df: pd.DataFrame) -> pd.DataFrame:
         """Инференс для DataFrame сообщений с колонками 'message_id' и 'text'."""
