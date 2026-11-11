@@ -38,6 +38,11 @@ def compute_daily_aggregates(
     Returns:
         pd.DataFrame с агрегатами по парам (chat_id, date).
     """
+    if messages_df.empty:
+        return pd.DataFrame(
+            columns=REQUIRED_DAILY_COLUMNS + ["n_neg", "n_pos", "n_agg"]
+        )
+
     if labels_df is not None:
         merged = messages_df[["message_id", "chat_id", "timestamp"]].merge(
             labels_df[["message_id", "is_service", "sentiment", "aggression"]],
@@ -87,7 +92,7 @@ def compute_daily_aggregates(
 def export_chat_daily_csv(
     daily_df: pd.DataFrame,
     output_path: str | Path,
-    round_decimals: int = 4,
+    round_decimals: int | None = None,
 ) -> Path:
     """Экспорт суточных агрегатов в эталонный файл chat_daily.csv.
 
@@ -98,7 +103,7 @@ def export_chat_daily_csv(
     Args:
         daily_df: DataFrame, полученный из compute_daily_aggregates.
         output_path: Путь к выходному файлу.
-        round_decimals: Округление вещественных показателей.
+        round_decimals: Округление вещественных показателей (по умолчанию без округления).
 
     Returns:
         Path к сохраненному файлу.
@@ -108,10 +113,11 @@ def export_chat_daily_csv(
 
     export_df = daily_df[REQUIRED_DAILY_COLUMNS].copy()
 
-    # Округление вещественных колонок
-    float_cols = ["mood_index", "negative_share", "aggression_share"]
-    for c in float_cols:
-        export_df[c] = export_df[c].round(round_decimals)
+    # Округление вещественных колонок при необходимости
+    if round_decimals is not None:
+        float_cols = ["mood_index", "negative_share", "aggression_share"]
+        for c in float_cols:
+            export_df[c] = export_df[c].round(round_decimals)
 
     # Запись с разделителем ';'
     export_df.to_csv(
