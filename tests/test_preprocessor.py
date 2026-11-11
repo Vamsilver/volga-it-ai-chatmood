@@ -74,6 +74,20 @@ class TestTextPreprocessor(unittest.TestCase):
         self.assertEqual(feats.iloc[2]["has_aggression_signal"], 1)
         self.assertEqual(feats.iloc[3]["has_aggression_signal"], 0)
 
+    def test_sarcasm_signal(self):
+        """Проверка детекции сигналов сарказма и иронии."""
+        df = pd.DataFrame({
+            "text": [
+                "Спасибо за горячую воду, которой нет уже неделю!",
+                "Наша УК нас бережет, как же 😂",
+                "Обычный рабочий день",
+            ]
+        })
+        feats = self.preprocessor.extract_features(df)
+        self.assertEqual(feats.iloc[0]["has_sarcasm_signal"], 1)
+        self.assertEqual(feats.iloc[1]["has_sarcasm_signal"], 1)
+        self.assertEqual(feats.iloc[2]["has_sarcasm_signal"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

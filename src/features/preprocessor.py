@@ -33,7 +33,7 @@ EMOJI_MAP = {
     # Позитивные
     r"[👍🙏😊❤️👌👏🎉💐🌸🤝😀😁😃]": " [EMOJI_POS] ",
     # Негативные / раздражение
-    r"[😡🤬🤦🤮👿💩😠💢👎💔]": " [EMOJI_NEG] ",
+    r"[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱]": " [EMOJI_NEG] ",
     # Смех / сарказм / насмешка
     r"[🤣😂😅😆]": " [EMOJI_LAUGH] ",
     # Информационные / объявления
@@ -61,6 +61,16 @@ AGGRESSION_PATTERNS = [
     r"(?:тебе\s+п[\.\*a-яё]*ц|слышишь\s+меня|морду\s+набью|руки\s+оторв[а-яё]*|посад[а-яё]*\s+этого)",
 ]
 
+# Паттерны сарказма и ироничных псевдо-благодарностей
+SARCASM_PATTERNS = [
+    r"спасибо\s+за[^.!?\n]{1,50}(?:нет|не\s+работает|сломал|ледян|грязн|холодн|отключ)",
+    r"зато\s+[^.!?\n]{1,50}[😡🤬🤦🤮👿💩😠💢👎💔]",
+    r"наш\s+любимый\s+[^.!?\n]{1,30}\)+",
+    r"наша\s+ук\s+нас\s+береж[а-яё]+",
+    r"сэкономили\)+",
+    r"ну\s+естественно\s*[\U0001f609\)]+",
+]
+
 
 class TextPreprocessor:
     """Текстовый процессор для нормализации специфики домовых чатов."""
@@ -82,6 +92,7 @@ class TextPreprocessor:
         self.emoji_compiled = [(re.compile(p), repl) for p, repl in EMOJI_MAP.items()]
         self.obscene_compiled = [re.compile(p, re.IGNORECASE) for p in OBSCENE_PATTERNS]
         self.aggression_compiled = [re.compile(p, re.IGNORECASE) for p in AGGRESSION_PATTERNS]
+        self.sarcasm_compiled = [re.compile(p, re.IGNORECASE) for p in SARCASM_PATTERNS]
         self.marker_regex = re.compile(r"(\[(?:имя|телефон|адрес|квартира|грз|email|ссылка|ник|номер)\])", re.IGNORECASE)
 
     def clean_text(self, text: str) -> str:
@@ -163,6 +174,12 @@ class TextPreprocessor:
         for pattern in self.aggression_compiled:
             has_aggr = has_aggr | raw_texts.apply(lambda s: 1 if pattern.search(s) else 0)
         feats["has_aggression_signal"] = has_aggr.astype(int)
+
+        # Сигналы сарказма (псевдо-благодарности, ироничные паттерны)
+        has_sarcasm = pd.Series(0, index=df.index, dtype=int)
+        for pattern in self.sarcasm_compiled:
+            has_sarcasm = has_sarcasm | raw_texts.apply(lambda s: 1 if pattern.search(s) else 0)
+        feats["has_sarcasm_signal"] = has_sarcasm.astype(int)
 
         # Экспрессия
         feats["has_excl_high"] = cleaned.str.contains(r"\[EXCL_HIGH\]").astype(int)
