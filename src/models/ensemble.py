@@ -91,7 +91,6 @@ SARCASM_STRONG_PATTERNS = [
     re.compile(r"красот[а-яё]*[\s\S]{0,80}(?:принять\s+меры|примите\s+меры|устраните|обращаюсь\s+к\s+ук)", re.IGNORECASE),
     re.compile(r"переда[юе][а-яё]*\s+(?:огромн[а-яё]*\s+)?привет[^.!?\n]{1,80}(?:кидал|бросал|насрал|сломал|разбил|свинь|балкон)", re.IGNORECASE),
     re.compile(r"отписыва[йт][а-яё]*\s+дальше", re.IGNORECASE),
-    re.compile(r"\b\w+\s+конечно\s+важнее\b", re.IGNORECASE),
 ]
 
 STANDALONE_NEG_EMOJIS = re.compile(r"^[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱\s!]+$")

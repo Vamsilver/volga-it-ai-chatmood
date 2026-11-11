@@ -35,14 +35,20 @@ class MultiTaskRuBertTiny(nn.Module if HAS_TORCH else object):
 
     def __init__(
         self,
-        model_name: str = "cointegrated/rubert-tiny2",
+        model_name: str | Path | None = None,
         dropout: float = 0.2,
     ) -> None:
         if not HAS_TORCH:
             raise RuntimeError("Для использования модели требуется установить torch и transformers")
         super().__init__()
-        self.model_name = model_name
-        self.encoder = AutoModel.from_pretrained(model_name)
+        default_local = Path("models/rubert_tiny2_multitask")
+        if model_name is None:
+            resolved_name = str(default_local) if default_local.is_dir() else "cointegrated/rubert-tiny2"
+        else:
+            resolved_name = str(model_name)
+        self.model_name = resolved_name
+        is_local = Path(resolved_name).exists()
+        self.encoder = AutoModel.from_pretrained(resolved_name, local_files_only=is_local)
         hidden_size = self.encoder.config.hidden_size
 
         self.dropout = nn.Dropout(dropout)
