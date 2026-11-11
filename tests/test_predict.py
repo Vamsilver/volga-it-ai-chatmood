@@ -89,5 +89,38 @@ class TestPredictPipeline(unittest.TestCase):
             self.assertListEqual(list(df_summary.columns), REQUIRED_SUMMARY_COLUMNS)
 
 
+    def test_pipeline_reaction_context_propagation(self):
+        """Проверка распространения контекста негатива на реплику-реакцию в пайплайне."""
+        baseline_path = Path("models/baseline.joblib")
+        if not baseline_path.is_file():
+            self.skipTest("models/baseline.joblib отсутствует на диске")
+
+        dialog_df = pd.DataFrame({
+            "message_id": ["m10", "m11"],
+            "chat_id": ["c99", "c99"],
+            "timestamp": ["2026-06-15 10:00:00", "2026-06-15 10:01:00"],
+            "user_id": ["u1", "u2"],
+            "text": [
+                "Лифт сломался, ужас какой-то!",
+                "И на 9 тоже",
+            ],
+        })
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            in_file = Path(tmp_dir) / "input.csv"
+            out_dir = Path(tmp_dir) / "output"
+            dialog_df.to_csv(in_file, sep=";", index=False, encoding="utf-8-sig")
+
+            run_pipeline(
+                input_path=in_file,
+                output_dir=out_dir,
+                models_dir="models",
+                device="cpu",
+            )
+            df_preds = pd.read_csv(out_dir / "messages_pred.csv", sep=";")
+            self.assertEqual(len(df_preds), 2)
+            self.assertEqual(df_preds.iloc[1]["sentiment"], "negative")
+
+
 if __name__ == "__main__":
     unittest.main()
