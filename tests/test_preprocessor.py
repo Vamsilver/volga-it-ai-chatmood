@@ -88,6 +88,41 @@ class TestTextPreprocessor(unittest.TestCase):
         self.assertEqual(feats.iloc[1]["has_sarcasm_signal"], 1)
         self.assertEqual(feats.iloc[2]["has_sarcasm_signal"], 0)
 
+    def test_enrich_chat_context(self):
+        """Проверка контекстного обогащения коротких реплик-реакций."""
+        from src.features.preprocessor import enrich_chat_context
+
+        df = pd.DataFrame({
+            "chat_id": ["c1", "c1", "c1", "c1", "c2"],
+            "timestamp": [
+                "2026-06-01 10:00:00",
+                "2026-06-01 10:01:00",  # +60s, реакция
+                "2026-06-01 10:02:00",  # +60s, позитив (НЕ обогащать)
+                "2026-06-01 10:40:00",  # +38m, слишком большой разрыв
+                "2026-06-01 10:00:30",  # другой чат, первое сообщение
+            ],
+            "text": [
+                "Лифт сломался, опять пешком на 15 этаж",
+                "И на 9 тоже",
+                "Спасибо, мастер уже пришел!",
+                "Аналогично",
+                "Согласен",
+            ]
+        })
+
+        enriched = enrich_chat_context(df, max_time_diff_sec=300)
+        self.assertEqual(len(enriched), 5)
+        # 1-я реплика - без контекста
+        self.assertEqual(enriched.iloc[0], "Лифт сломался, опять пешком на 15 этаж")
+        # 2-я реплика - обогащена контекстом лифта
+        self.assertIn("[Контекст: Лифт сломался, опять пешком на 15 этаж]", enriched.iloc[1])
+        # 3-я реплика - позитив, не обогащается
+        self.assertEqual(enriched.iloc[2], "Спасибо, мастер уже пришел!")
+        # 4-я реплика - превышен таймаут, не обогащается
+        self.assertEqual(enriched.iloc[3], "Аналогично")
+        # 5-я реплика - первое сообщение в чате c2, не обогащается
+        self.assertEqual(enriched.iloc[4], "Согласен")
+
 
 if __name__ == "__main__":
     unittest.main()

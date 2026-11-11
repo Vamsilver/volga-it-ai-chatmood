@@ -186,3 +186,71 @@ class TextPreprocessor:
         feats["has_quest_high"] = cleaned.str.contains(r"\[QUEST_HIGH\]").astype(int)
 
         return feats
+
+
+REACTION_PATTERNS = re.compile(
+    r"(?:^(?:и\s+у\s+меня|и\s+на\s+|и\s+в\s+|мы\s+уже|ваши\s+предложения|в\s+отпуске\s+наверное|думаю[,\s]+нет|я\s+подала\s+тоже|горячая-холодная|[🤐\U0001f910]+)|"
+    r"\b(?:тоже|также|так\s+же|аналогично|однозначно|согласен|согласна|согласны|точно|плюсую|\+1|поддерживаю|жмуркино|куда\s+обращаться)\b|"
+    r"^да[.,!\s]+(?:первая|вторая|третья|в\s+явных|именно|участковый))",
+    re.IGNORECASE,
+)
+REACTION_POS_EXCLUSIONS = re.compile(
+    r"спасибо|благодар|класс|отличн|здравствуй|добр[ый|ое]|поздравл|супер|[👍🙏👌👏🎉🌸❤️]",
+    re.IGNORECASE,
+)
+
+
+def enrich_chat_context(
+    df: pd.DataFrame,
+    max_time_diff_sec: float = 300.0,
+    max_words: int = 5,
+) -> pd.Series:
+    """Обогащение коротких реплик-реакций контекстом предыдущего сообщения из того же чата.
+
+    Если сообщение является короткой репликой-согласием/реакцией (до max_words слов),
+    пришло в течение max_time_diff_sec секунд после предыдущего сообщения того же chat_id,
+    и не содержит собственных позитивных маркеров — к нему подклеивается контекст предыдущего сообщения.
+
+    Args:
+        df: DataFrame с колонками text, и опционально chat_id, timestamp.
+        max_time_diff_sec: Максимальная разница во времени между репликами (по умолчанию 300 сек).
+        max_words: Максимальная длина реплики-реакции для обогащения (по умолчанию 5 слов).
+
+    Returns:
+        pd.Series обогащенных текстов в исходном порядке строк df.
+    """
+    if "text" not in df.columns or "chat_id" not in df.columns or "timestamp" not in df.columns:
+        return df["text"] if "text" in df.columns else pd.Series(dtype=object)
+
+    work_df = df[["chat_id", "timestamp", "text"]].copy()
+    work_df["_orig_idx"] = work_df.index
+    work_df = work_df.sort_values(["chat_id", "timestamp"]).reset_index(drop=True)
+    work_df["prev_text"] = work_df.groupby("chat_id")["text"].shift(1)
+
+    timestamps = pd.to_datetime(work_df["timestamp"], errors="coerce")
+    prev_timestamps = work_df.groupby("chat_id")["timestamp"].shift(1)
+    prev_timestamps = pd.to_datetime(prev_timestamps, errors="coerce")
+    work_df["time_diff_sec"] = (timestamps - prev_timestamps).dt.total_seconds()
+
+    enriched = []
+    for idx, row in work_df.iterrows():
+        curr = str(row["text"]).strip() if pd.notna(row["text"]) else ""
+        prev = str(row["prev_text"]).strip() if pd.notna(row["prev_text"]) else ""
+        dt = row["time_diff_sec"]
+
+        if (
+            prev
+            and pd.notna(dt)
+            and dt < max_time_diff_sec
+            and len(curr.split()) <= max_words
+            and REACTION_PATTERNS.search(curr)
+            and not REACTION_POS_EXCLUSIONS.search(curr)
+        ):
+            enriched.append(f"{curr} [Контекст: {prev}]")
+        else:
+            enriched.append(curr)
+
+    work_df["enriched_text"] = enriched
+    work_df = work_df.sort_values("_orig_idx").reset_index(drop=True)
+    return work_df["enriched_text"]
+
