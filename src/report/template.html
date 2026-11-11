@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Волга-IT 2026 | Аналитический отчёт: Настроение в домовых чатах ЖКХ</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #2563eb;
+            --danger: #ef4444;
+            --danger-bg: #fee2e2;
+            --warning: #f59e0b;
+            --warning-bg: #fef3c7;
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 24px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: #ffffff;
+            padding: 32px 36px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: var(--card-shadow);
+        }
+        .header-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
+        .header p { color: #94a3b8; font-size: 15px; max-width: 850px; }
+        .badge-bar { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            color: #f1f5f9;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .badge-pulse { background: #10b981; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--card-shadow);
+        }
+        .kpi-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .kpi-value { font-size: 26px; font-weight: 700; color: var(--text-main); }
+        .kpi-subtext { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .section-card {
+            background: var(--surface);
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            box-shadow: var(--card-shadow);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+        .section-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+        .section-subtitle { font-size: 13px; color: var(--text-muted); }
+        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 992px) { .charts-row { grid-template-columns: 1fr; } }
+        table.summary-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+        table.summary-table th {
+            background: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+            padding: 12px 14px;
+            border-bottom: 2px solid var(--border);
+        }
+        table.summary-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+        table.summary-table tr:hover { background-color: #f8fafc; }
+        .trend-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .trend-worsening { background: var(--danger-bg); color: #b91c1c; }
+        .trend-stable { background: #f1f5f9; color: #475569; }
+        .trend-improving { background: var(--success-bg); color: #047857; }
+        .risk-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .risk-high { background: #fecaca; color: #991b1b; }
+        .risk-mid { background: #fef08a; color: #854d0e; }
+        .risk-low { background: #bbf7d0; color: #166534; }
+        .incident-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+        .incident-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            background: #ffffff;
+        }
+        .incident-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed var(--border);
+        }
+        .topic-pill {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+        .quote-box {
+            background: #f8fafc;
+            border-left: 3px solid #cbd5e1;
+            padding: 8px 12px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #334155;
+            font-style: italic;
+            border-radius: 0 6px 6px 0;
+        }
+        .quote-box.is-agg { border-left-color: #ef4444; background: #fff1f2; }
+        .footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Шапка отчёта -->
+    <header class="header">
+        <div class="header-title-row">
+            <div>
+                <h1>Волга-IT 2026 · Аналитический дашборд домовых чатов ЖКХ</h1>
+                <p>Единый комплекс мониторинга социального настроения жителей, выявления очагов напряженности и расследования инцидентов в многоквартирных домах.</p>
+                <div class="badge-bar">
+                    <span class="badge"><span class="badge-pulse"></span>100% Автономный офлайн-отчёт</span>
+                    <span class="badge">Модель: RuBERT-Tiny2 Multi-Task + Baseline</span>
+                    <span class="badge">Период: Июнь — Июль 2026</span>
+                    <span class="badge">Стандарт: chatmood_metrics.py</span>
+                </div>
+            </div>
+            <div style="text-align: right; min-width: 180px;">
+                <div style="font-size: 12px; color: #94a3b8;">Статус мониторинга</div>
+                <div style="font-size: 20px; font-weight: 700; color: #f87171;">ТРЕБУЕТСЯ РЕАКЦИЯ</div>
+                <div style="font-size: 12px; color: #cbd5e1; margin-top: 4px;">Критических чатов: {{ kpi.worsening_count }} из {{ kpi.total_chats }}</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Сводные KPI Карточки -->
+    <section class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Сводный индекс настроения</div>
+            <div class="kpi-value" style="color: {{ '#ef4444' if kpi.global_mood < -0.2 else '#10b981' }};">{{ "%.2f"|format(kpi.global_mood) }}</div>
+            <div class="kpi-subtext">Диапазон [-1.0 ... +1.0] (фон отрицательный)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Сообщений обработано</div>
+            <div class="kpi-value">{{ "{:,}".format(kpi.total_messages) }}</div>
+            <div class="kpi-subtext">{{ "{:,}".format(kpi.resident_msgs) }} реплик жителей</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Служебные рассылки (УК/боты)</div>
+            <div class="kpi-value">{{ "%.1f"|format(kpi.service_share) }}%</div>
+            <div class="kpi-subtext">{{ kpi.service_msgs }} объявлений исключено из агрегатов</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Доля негативных обращений</div>
+            <div class="kpi-value" style="color: #ef4444;">{{ "%.1f"|format(kpi.global_neg_share) }}%</div>
+            <div class="kpi-subtext">{{ kpi.total_negative }} претензий жителей</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Доля агрессии и конфликтов</div>
+            <div class="kpi-value" style="color: #be123c;">{{ "%.1f"|format(kpi.global_agg_share) }}%</div>
+            <div class="kpi-subtext">{{ kpi.total_aggression }} токсичных сообщений</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Динамика трендов</div>
+            <div class="kpi-value" style="font-size: 20px; padding-top: 4px;">
+                <span style="color: #ef4444;">▼ {{ kpi.worsening_count }}</span> · 
+                <span style="color: #64748b;">■ {{ kpi.stable_count }}</span> · 
+                <span style="color: #10b981;">▲ {{ kpi.improving_count }}</span>
+            </div>
+            <div class="kpi-subtext">Ухудшение / Стабильно / Улучшение</div>
+        </div>
+    </section>
+
+    <!-- Сводная таблица сравнительного анализа чатов -->
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Сравнительный рейтинг напряжённости домовых чатов</h2>
+                <p class="section-subtitle">Сводные показатели по спецификации регламента (chat_summary.csv) для приоритизации выездов инспекции</p>
+            </div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Домовой чат</th>
+                        <th>Реплик жителей</th>
+                        <th>Индекс настроения</th>
+                        <th>Доля негатива</th>
+                        <th>Доля агрессии</th>
+                        <th>Недельный тренд</th>
+                        <th>Дни-пики конфликтов</th>
+                        <th>Статус риска</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in incident_data %}
+                    <tr>
+                        <td><strong>Чат {{ row.chat_id }}</strong></td>
+                        <td>{{ row.n_resident }}</td>
+                        <td style="font-weight: 700; color: {{ '#ef4444' if row.mood_index < -0.2 else '#10b981' }};">{{ "%.2f"|format(row.mood_index) }}</td>
+                        <td>{{ "%.1f"|format(row.negative_share) }}%</td>
+                        <td style="font-weight: 600; color: {{ '#be123c' if row.aggression_share > 10 else 'inherit' }};">{{ "%.1f"|format(row.aggression_share) }}%</td>
+                        <td><span class="trend-pill trend-{{ row.trend }}">{{ row.trend_ru }}</span></td>
+                        <td><code>{{ row.peaks_formatted }}</code></td>
+                        <td><span class="risk-badge {{ row.risk_class }}">{{ row.risk_label }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Раздел 1: Динамика настроения во времени -->
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">1. Динамика настроения жителей во времени</h2>
+                <p class="section-subtitle">Ежедневный индекс настроения жителей (mood_index) и связь всплесков активности с ростом токсичности</p>
+            </div>
+        </div>
+        <div>{{ html_mood | safe }}</div>
+        <div style="margin-top: 20px;">{{ html_agg | safe }}</div>
+    </section>
+
+    <!-- Раздел 2: Тепловая карта настроений (Heatmap Чат x Дата) -->
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">2. Тепловая карта настроений (Чат × Дата)</h2>
+                <p class="section-subtitle">Красные зоны соответствуют дням с преобладанием жалоб и конфликтов; зеленые — спокойным периодам</p>
+            </div>
+        </div>
+        <div>{{ html_heat | safe }}</div>
+    </section>
+
+    <!-- Раздел 3: Тональность и суточный профиль активности -->
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">3. Анализ структуры обращений и суточного профиля</h2>
+                <p class="section-subtitle">Распределение тональностей по домам и суточный график активности жителей</p>
+            </div>
+        </div>
+        <div class="charts-row">
+            <div>{{ html_sent | safe }}</div>
+            <div>{{ html_hour | safe }}</div>
+        </div>
+    </section>
+
+    <!-- Раздел 4: Разбор инцидентов в пиковые дни (Deep Dive) -->
+    <section class="section-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">4. Детальный разбор инцидентов в дни-пики (Deep Dive)</h2>
+                <p class="section-subtitle">Автоматическое выделение тем конфликтов (ЖКХ-триггеров) и характерных реплик жителей в кризисные даты</p>
+            </div>
+        </div>
+        <div class="incident-grid">
+            {% for inc in incident_data %}
+            <div class="incident-card">
+                <div class="incident-header">
+                    <div>
+                        <strong style="font-size: 16px;">Чат {{ inc.chat_id }}</strong>
+                        <span class="risk-badge {{ inc.risk_class }}" style="margin-left: 8px;">{{ inc.risk_label }}</span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted);">Индекс: <strong>{{ "%.2f"|format(inc.mood_index) }}</strong></div>
+                </div>
+                <div style="font-size: 13px; margin-bottom: 12px;">
+                    Выявлено пиковых дней: <strong>{{ inc.peaks|length }}</strong> | Агрессия: <strong>{{ "%.1f"|format(inc.aggression_share) }}%</strong>
+                </div>
+                {% for p in inc.peaks %}
+                <div style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <strong style="color: #0f172a; font-size: 13px;">📅 Пик: {{ p.date }}</strong>
+                        <span style="font-size: 12px; font-weight: 600; color: #e11d48;">Агрессия: {{ "%.1f"|format(p.aggression_share) }}% ({{ p.n_resident }} сообщ.)</span>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        {% for t in p.topics %}<span class="topic-pill">{{ t }}</span>{% endfor %}
+                    </div>
+                    <div>
+                        {% for q in p.quotes %}
+                        <div class="quote-box {{ 'is-agg' if q.aggression == 1 else '' }}">"{{ q.text }}"</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Раздел 5: Методологическая справка -->
+    <section class="section-card" style="background: #f1f5f9; border: 1px solid #cbd5e1;">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #1e293b;">Методологическая справка и формулы регламента</h3>
+        <ul style="padding-left: 20px; font-size: 13px; color: #334155; line-height: 1.6;">
+            <li><strong>Исключение служебных сообщений:</strong> Все метрики агрегации (mood_index, доли негатива и агрессии) рассчитываются строго по репликам жителей (<code>is_service = 0</code>). Официальные объявления УК и рассылки исключены.</li>
+            <li><strong>Индекс настроения:</strong> <code>mood_index = (n_positive - n_negative) / n_resident</code>, принимает значения от -1.0 (тотальный негатив) до +1.0 (абсолютное удовлетворение).</li>
+            <li><strong>Определение тренда:</strong> Анализируются ISO-недели с числом сообщений жителей &ge; 5. При наличии &ge; 3 недель строится взвешенная линейная регрессия недельного индекса на номер недели. Наклон &gt; +0.05 трактуется как <em>улучшение (improving)</em>, &lt; -0.05 — <em>ухудшение (worsening)</em>, иначе <em>стабильно (stable)</em>.</li>
+            <li><strong>Пиковые дни:</strong> До трёх дней с максимальной конфликтностью по формуле <code>n_negative + 2 · n_aggression</code> (при <code>n_resident &ge; 5</code>).</li>
+        </ul>
+    </section>
+
+    <footer class="footer">
+        Аналитический комплекс «Волга-IT 2026: Настроение домовых чатов» · Автономная сборка · Офлайн-инференс
+    </footer>
+</div>
+</body>
+</html>
