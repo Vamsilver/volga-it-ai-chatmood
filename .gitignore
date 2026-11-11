@@ -1,4 +1,4 @@
-
+﻿
 # AI internal operational context (doc-craft & graphify)
 .context/
 graphify-out/
@@ -19,20 +19,19 @@ venv/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-# Models (большие бинарники — загружаем отдельно или через облако)
+# Models (Р±РѕР»СЊС€РёРµ Р±РёРЅР°СЂРЅРёРєРё вЂ” Р·Р°РіСЂСѓР¶Р°РµРј РѕС‚РґРµР»СЊРЅРѕ РёР»Рё С‡РµСЂРµР· РѕР±Р»Р°РєРѕ)
 /models/
 
-# Dev outputs (результаты прогона — не в git)
-dev_out/
+# Dev outputs (СЂРµР·СѓР»СЊС‚Р°С‚С‹ РїСЂРѕРіРѕРЅР° вЂ” РЅРµ РІ git)
 
-# Временные файлы
+# Р’СЂРµРјРµРЅРЅС‹Рµ С„Р°Р№Р»С‹
 *.gitkeep
 *.tmp
 *.log
 
-# Архив организаторов
+# РђСЂС…РёРІ РѕСЂРіР°РЅРёР·Р°С‚РѕСЂРѕРІ
 participants.zip
 participants/
 
-# PDF-задание
+# PDF-Р·Р°РґР°РЅРёРµ
 *.pdf

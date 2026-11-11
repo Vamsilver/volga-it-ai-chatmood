@@ -1,0 +1,15 @@
+Baseline macro-F1: 0.7003
+Best macro-F1: 0.7003 at t_pos=0.33, t_neg=0.33
+Class F1: neg=0.6594, neu=0.7400, pos=0.6179
+
+Top 10 combinations:
+F1=0.6970 (pos=0.38, neg=0.49)
+F1=0.6944 (pos=0.32, neg=0.49)
+F1=0.6944 (pos=0.36, neg=0.49)
+F1=0.6930 (pos=0.38, neg=0.47)
+F1=0.6924 (pos=0.34, neg=0.49)
+F1=0.6920 (pos=0.38, neg=0.43)
+F1=0.6905 (pos=0.30, neg=0.49)
+F1=0.6905 (pos=0.28, neg=0.49)
+F1=0.6905 (pos=0.26, neg=0.49)
+F1=0.6904 (pos=0.32, neg=0.47)

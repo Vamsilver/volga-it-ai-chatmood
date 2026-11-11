@@ -1,0 +1,60 @@
+{
+  "team": "",
+  "problems": [],
+  "c1_classification": {
+    "f1_sentiment_macro": 0.7388,
+    "f1_sentiment_per_class": {
+      "negative": 0.6828,
+      "neutral": 0.8137,
+      "positive": 0.72
+    },
+    "f1_aggression": 0.6154,
+    "f1_service": 0.8409,
+    "accuracy_sentiment": 0.7617,
+    "Q1": 0.7346,
+    "points": 14.87
+  },
+  "c2_aggregation": {
+    "daily_mood_mae": 0.1473,
+    "daily_negative_corr": 0.7216,
+    "daily_coverage": 1.0,
+    "chat_rank_spearman": 0.8,
+    "trend_accuracy": 1.0,
+    "peak_days_hit": 0.9167,
+    "Q2": 0.7813,
+    "points_auto": 12.25
+  },
+  "c3_hard_cases": {
+    "per_tag": {
+      "sarcasm": {
+        "n": 47,
+        "f1_macro": 0.4268,
+        "accuracy": 0.7447
+      },
+      "typos": {
+        "n": 46,
+        "f1_macro": 0.6697,
+        "accuracy": 0.6739
+      },
+      "jargon": {
+        "n": 92,
+        "f1_macro": 0.6051,
+        "accuracy": 0.7065
+      },
+      "emoji": {
+        "n": 20,
+        "f1_macro": 0.5455,
+        "accuracy": 0.6
+      },
+      "context": {
+        "n": 87,
+        "f1_macro": 0.4705,
+        "accuracy": 0.5632
+      }
+    },
+    "Q3": 0.5435,
+    "points_auto": 3.9
+  },
+  "auto_points": 31.02,
+  "auto_points_max": 42
+}

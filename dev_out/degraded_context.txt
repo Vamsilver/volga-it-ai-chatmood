@@ -1,0 +1,92 @@
+ID: m116153, Gold: neutral, Orig: neutral, New: negative
+Text: Может отключают? Звуки стояли очень громкие
+
+ID: m103358, Gold: neutral, Orig: neutral, New: negative
+Text: 350р
+
+ID: m114273, Gold: neutral, Orig: neutral, New: negative
+Text: Значит мошенники
+
+ID: m114352, Gold: positive, Orig: positive, New: negative
+Text: [имя], благодарю вас
+
+ID: m109660, Gold: positive, Orig: positive, New: neutral
+Text: Класс!
+
+ID: m127516, Gold: neutral, Orig: neutral, New: negative
+Text: Да, недавно. Понятно 
+Я бы обязательно пришла .
+
+ID: m115140, Gold: neutral, Orig: neutral, New: negative
+Text: Седой с немецкой овчаркой?
+
+ID: m103777, Gold: neutral, Orig: neutral, New: negative
+Text: Да- это именно он
+
+ID: m128649, Gold: neutral, Orig: neutral, New: negative
+Text: Раскидал информацию по каналам
+
+ID: m112880, Gold: positive, Orig: positive, New: neutral
+Text: Спасибо, [имя].
+
+ID: m119269, Gold: negative, Orig: negative, New: neutral
+Text: 4 парадная особенно!
+
+ID: m111295, Gold: neutral, Orig: neutral, New: negative
+Text: Скорей всего должников разделили на всех
+
+ID: m115679, Gold: neutral, Orig: neutral, New: negative
+Text: Да за май больше насчитано, чем за апрель
+
+ID: m114913, Gold: neutral, Orig: neutral, New: negative
+Text: Да в расчёте идет за полный месяц
+
+ID: m114551, Gold: neutral, Orig: neutral, New: negative
+Text: Дверь открывается через раз
+
+ID: m107432, Gold: neutral, Orig: neutral, New: negative
+Text: Дело ваше
+
+ID: m125580, Gold: neutral, Orig: neutral, New: negative
+Text: Не поняла ваш вопрос?
+
+ID: m124240, Gold: negative, Orig: negative, New: neutral
+Text: У нас такая же беда((
+
+ID: m113832, Gold: neutral, Orig: neutral, New: positive
+Text: Сегодня утром уборщица убирала остатки
+
+ID: m107007, Gold: neutral, Orig: neutral, New: negative
+Text: Вот тут
+
+ID: m108108, Gold: neutral, Orig: neutral, New: negative
+Text: [contact]
+
+ID: m129148, Gold: negative, Orig: negative, New: neutral
+Text: Сняли и забыли?
+
+ID: m107315, Gold: neutral, Orig: neutral, New: negative
+Text: Выложите в блек лист
+
+ID: m123952, Gold: positive, Orig: positive, New: neutral
+Text: Спасибо, посмотрим.
+
+ID: m115682, Gold: neutral, Orig: neutral, New: negative
+Text: Со звуком ( [имя]
+
+ID: m104107, Gold: neutral, Orig: neutral, New: negative
+Text: [image]
+
+ID: m113792, Gold: negative, Orig: negative, New: neutral
+Text: Да, вода есть
+Жёлтая и вонючая как обычно летом, но есть
+
+ID: m103619, Gold: neutral, Orig: neutral, New: negative
+Text: 3 секция тоже только холодная.
+
+ID: m127330, Gold: neutral, Orig: neutral, New: negative
+Text: Помогите пожалуйста массово подписями хотя-бы
+
+ID: m104614, Gold: neutral, Orig: neutral, New: negative
+Text: первая секция?
+

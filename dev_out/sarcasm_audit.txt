@@ -1,0 +1,48 @@
+Total sarcasm messages: 47, errors: 15
+
+ID: m120454, Gold: negative, Pred: neutral
+Text: Представляете, открою Вам тайну для Вас, общие трубы для 24 этажного дома проходчт через все этажи и замыкающий контур для нижней зоны как раз на 12 этаже, а для верхней зоны на 24-ом. Сантехнику нужно было попасть для проверки труб на 12 этаже по заявке от жильца на 23 этаже. Или В
+
+ID: m117042, Gold: negative, Pred: neutral
+Text: Я пенсионерка. Сама поправляю плитку. Вы колясочник? Тогда к вам нет вопросов.
+
+ID: m113854, Gold: negative, Pred: positive
+Text: Добрый день! 
+Обращаюсь к представителю УК. В 3-й секции вот такая красота. Прошу принять меры.
+
+ID: m117086, Gold: negative, Pred: neutral
+Text: Передаю огромный привет родителям ребят, которые с 18 этажа 8 секции с общего балкона кидали яйца. Яйцо упало перед моей женой, следом шёл я с ребёнком.
+
+ID: m113883, Gold: negative, Pred: positive
+Text: 😂
+
+ID: m104754, Gold: negative, Pred: neutral
+Text: Отписывайтесь дальше
+
+ID: m122058, Gold: neutral, Pred: negative
+Text: Потому что второй видимо сломан))
+
+ID: m113178, Gold: negative, Pred: neutral
+Text: Кактус конечно важнее.
+
+ID: m110508, Gold: neutral, Pred: negative
+Text: Интересно, а почему его забрала скорая? Ему ведь не плохо было, а совсем даже наоборот...🤔
+
+ID: m127073, Gold: negative, Pred: neutral
+Text: да. первая секция в явных лидерах. но там и квартир больше
+
+ID: m118572, Gold: negative, Pred: neutral
+Text: В отпуске наверное.
+
+ID: m127876, Gold: negative, Pred: neutral
+Text: Наверное это проклятие 17 этажей ,1п
+
+ID: m102372, Gold: negative, Pred: neutral
+Text: из какой еще управы? )))))
+
+ID: m119240, Gold: neutral, Pred: negative
+Text: Если вам позвонят задекларировать деньги, собрав их в пакет и выбросив в канаву - вы хоть не вздумайте)
+
+ID: m116250, Gold: negative, Pred: neutral
+Text: Жмуркино.
+
