@@ -23,11 +23,32 @@ import joblib
 import numpy as np
 import pandas as pd
 
+import re
+
 from src.features.preprocessor import TextPreprocessor
 from src.models.baseline import BaselineClassifier
 from src.models.transformer import HAS_TORCH, REV_SENTIMENT_MAP, TransformerPipeline
 
 SENTIMENT_CLASSES = ("negative", "neutral", "positive")
+
+# Паттерны прямых личных оскорблений, угроз и явной агрессии для жесткого оверрайда
+INSULT_OVERRIDE_PATTERNS = [
+    re.compile(
+        r"\b(?:конченн[а-яё]*|ублюд[а-яё]*|дебил[а-яё]*|придур[а-яё]*|идиот[а-яё]*|"
+        r"тварь[а-яё]*|мраз[а-яё]*|гнид[а-яё]*|чмо[а-яё]*|недоносок[а-яё]*|упыр[а-яё]*|"
+        r"отребь[а-яё]*|быдл[а-яё]*|сволоч[а-яё]*|руко[@оoж\*\.]+[пp][ыеа-яё]*|клоун[а-яё]*|маргинал[а-яё]*)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:(?:голову|мозги)[^.!?\n]{0,25}включи|включи[^.!?\n]{0,25}(?:голову|мозги)|"
+        r"рот\s+закрой|закрой\s+рот|заткни[а-яё]*|молчал[а-яё]*\s+бы|недержание\s+во\s+рту|метать\s+бисер|🐖)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:тебе\s+п[\.\*a-яё]*ц|слышишь\s+меня|морду\s+набью|руки\s+оторв[а-яё]*|посад[а-яё]*\s+этого)",
+        re.IGNORECASE,
+    ),
+]
 
 
 class EnsembleClassifier:
@@ -40,8 +61,8 @@ class EnsembleClassifier:
         preprocessor: TextPreprocessor | None = None,
         weight_service: float = 0.15,
         weight_sentiment: float = 0.45,
-        weight_aggression: float = 0.35,
-        aggression_threshold: float = 0.35,
+        weight_aggression: float = 0.50,
+        aggression_threshold: float = 0.65,
         obscene_sent_boost: float = 0.20,
         obscene_agg_boost: float = 0.15,
     ) -> None:
@@ -199,6 +220,15 @@ class EnsembleClassifier:
         sent_indices = np.argmax(probs["sentiment"], axis=1)
         pred_sent = np.array([REV_SENTIMENT_MAP[idx] for idx in sent_indices], dtype=object)
         pred_agg = (probs["aggression"] >= self.aggression_threshold).astype(int)
+
+        # Hard-rule override: прямые личные оскорбления и явные угрозы
+        # Принудительно переводят тональность в negative и выставляют aggression = 1
+        for i, text in enumerate(texts):
+            if pred_svc[i] == 0:
+                t = str(text) if pd.notna(text) else ""
+                if any(p.search(t) for p in INSULT_OVERRIDE_PATTERNS):
+                    pred_sent[i] = "negative"
+                    pred_agg[i] = 1
 
         # Соблюдение жестких инвариантов разметки
         pred_sent, pred_agg = self._apply_invariants(pred_svc, pred_sent, pred_agg)

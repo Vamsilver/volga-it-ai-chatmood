@@ -127,6 +127,21 @@ class TestEnsembleClassifier(unittest.TestCase):
             list(preds.columns), ["is_service", "sentiment", "aggression"]
         )
 
+    def test_insult_hard_override(self):
+        """Проверка принудительного выставления negative и aggression=1 для прямых оскорблений."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        insult_msgs = [
+            "Конченные люди, слов нет!",
+            "Вы лучше включите свою голову и подумайте",
+        ]
+        preds = ensemble.predict(insult_msgs)
+        self.assertEqual(preds.iloc[0]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[0]["aggression"], 1)
+        self.assertEqual(preds.iloc[1]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[1]["aggression"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
