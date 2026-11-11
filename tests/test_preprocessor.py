@@ -123,6 +123,16 @@ class TestTextPreprocessor(unittest.TestCase):
         # 5-я реплика - первое сообщение в чате c2, не обогащается
         self.assertEqual(enriched.iloc[4], "Согласен")
 
+    def test_typo_normalization(self):
+        """Проверка нормализации опечаток в корнях проблемных слов (Milestone 12.2)."""
+        raw = "Тут жмть невозможно, лдифт сломалсо, отопленее отключино!"
+        cleaned = self.preprocessor.clean_text(raw)
+        self.assertIn("жить невозможно", cleaned)
+        self.assertIn("лифт", cleaned)
+        self.assertIn("сломался", cleaned)
+        self.assertIn("отопление", cleaned)
+        self.assertIn("отключено", cleaned)
+
 
 if __name__ == "__main__":
     unittest.main()

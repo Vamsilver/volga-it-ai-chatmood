@@ -72,6 +72,23 @@ SARCASM_PATTERNS = [
 ]
 
 
+# Словарь типичных опечаток в проблемных и эмоциональных словах
+TYPO_NORMALIZATION_MAP = {
+    r"\bжмть\b": "жить",
+    r"\bпострадалв\b": "пострадала",
+    r"\bотключино\b": "отключено",
+    r"\bотчетатся\b": "отчитаться",
+    r"\bпроходчт\b": "проходят",
+    r"\bичпугаются\b": "испугаются",
+    r"\bсломалсо\b": "сломался",
+    r"\bлдифт\b": "лифт",
+    r"\bотопленее\b": "отопление",
+    r"\bхолондая\b": "холодная",
+    r"\bнапора\s+ли\b": "не пора ли",
+    r"\bмноготсобак\b": "много собак",
+}
+
+
 class TextPreprocessor:
     """Текстовый процессор для нормализации специфики домовых чатов."""
 
@@ -93,6 +110,7 @@ class TextPreprocessor:
         self.obscene_compiled = [re.compile(p, re.IGNORECASE) for p in OBSCENE_PATTERNS]
         self.aggression_compiled = [re.compile(p, re.IGNORECASE) for p in AGGRESSION_PATTERNS]
         self.sarcasm_compiled = [re.compile(p, re.IGNORECASE) for p in SARCASM_PATTERNS]
+        self.typo_compiled = [(re.compile(p, re.IGNORECASE), repl) for p, repl in TYPO_NORMALIZATION_MAP.items()]
         self.marker_regex = re.compile(r"(\[(?:имя|телефон|адрес|квартира|грз|email|ссылка|ник|номер)\])", re.IGNORECASE)
 
     def clean_text(self, text: str) -> str:
@@ -101,6 +119,10 @@ class TextPreprocessor:
             return ""
 
         t = str(text)
+
+        # 0. Нормализация типичных опечаток в корнях проблемных слов
+        for pattern, repl in self.typo_compiled:
+            t = pattern.sub(repl, t)
 
         # 1. Отделение прилипшей пунктуации после слов (опечатки склейки: "воды.Завтра" -> "воды. Завтра")
         t = re.sub(r"([а-яёА-ЯЁa-zA-Z])([.,!?])([а-яёА-ЯЁa-zA-Z])", r"\1\2 \3", t)
