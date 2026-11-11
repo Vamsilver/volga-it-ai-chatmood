@@ -23,19 +23,26 @@ JKH_VOCABULARY = {
     r"\bодпу\b": "общедомовой счетчик",
     r"\bук\b": "управляющая компания",
     r"\bуправляйк[а-яё]*\b": "управляющая компания",
+    r"\bуправляшк[а-яё]*\b": "управляющая компания",
     r"\bтсж\b": "товарищество собственников",
     r"\bгжи\b": "жилищная инспекция",
     r"\bрсо\b": "ресурсоснабжающая организация",
+    r"\bосс\b": "общее собрание собственников",
+    r"\bадс\b": "аварийно диспетчерская служба",
+    r"\bквадо\b": "система заявок",
+    r"\bпарадн[а-яё]+\b": "подъезд",
+    r"\bразвоздуш[а-яё]+\b": "спустить воздух",
+    r"\bнарк[а-яё]*\b": "наркоманы",
 }
 
 # Семантические группы эмодзи
 EMOJI_MAP = {
     # Позитивные
-    r"[👍🙏😊❤️👌👏🎉💐🌸🤝😀😁😃]": " [EMOJI_POS] ",
-    # Негативные / раздражение
-    r"[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱]": " [EMOJI_NEG] ",
+    r"[👍🙏😊❤️👌👏🎉💐🌸🤝😀😁😃🫶🥰😍🥳✨]": " [EMOJI_POS] ",
+    # Негативные / раздражение / шок / отвращение
+    r"[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱😳🤐😩😫😭🤢]": " [EMOJI_NEG] ",
     # Смех / сарказм / насмешка
-    r"[🤣😂😅😆]": " [EMOJI_LAUGH] ",
+    r"[🤣😂😅😆🙃😏]": " [EMOJI_LAUGH] ",
     # Информационные / объявления
     r"[📍🔹🏡📢ℹ️🔔⚠️]": " [EMOJI_INFO] ",
 }
@@ -85,6 +92,15 @@ TYPO_NORMALIZATION_MAP = {
     r"\bотопленее\b": "отопление",
     r"\bхолондая\b": "холодная",
     r"\bнапора\s+ли\b": "не пора ли",
+    r"\bдобролись\b": "добрались",
+    r"\bнавнодушн[а-яё]*\b": "равнодушного",
+    r"\bпоаравтлиа\b": "поправила",
+    r"\bполучпет\b": "получает",
+    r"\bпочтовыц\b": "почтовый",
+    r"\bсабака\b": "собака",
+    r"\bмноготсобак\b": "много собак",
+    r"\bуде\s+не\s+надо\b": "уже не надо",
+    r"\bсбростлась\b": "сбросилась",
 }
 
 
@@ -123,8 +139,9 @@ class TextPreprocessor:
         for pattern, repl in self.typo_compiled:
             t = pattern.sub(repl, t)
 
-        # 1. Отделение прилипшей пунктуации после слов (опечатки склейки: "воды.Завтра" -> "воды. Завтра")
-        t = re.sub(r"([а-яёА-ЯЁa-zA-Z])([.,!?])([а-яёА-ЯЁa-zA-Z])", r"\1\2 \3", t)
+        # 1. Отделение прилипшей пунктуации после слов и цифр (опечатки склейки: "воды.Завтра" -> "воды. Завтра", "2парадная ,аналогично")
+        t = re.sub(r"\s+([.,!?])", r"\1", t)
+        t = re.sub(r"([.,!?])([а-яёА-ЯЁa-zA-Z0-9])", r"\1 \2", t)
 
         # 2. Нормализация маркеров анонимизации (выделение пробелами)
         if self.separate_markers:
@@ -205,14 +222,17 @@ class TextPreprocessor:
         # Экспрессия
         feats["has_excl_high"] = cleaned.str.contains(r"\[EXCL_HIGH\]").astype(int)
         feats["has_quest_high"] = cleaned.str.contains(r"\[QUEST_HIGH\]").astype(int)
+        feats["is_context_reaction"] = raw_texts.apply(is_context_reaction).astype(int)
 
         return feats
 
 
 REACTION_PATTERNS = re.compile(
-    r"(?:^(?:и\s+у\s+меня|и\s+у\s+нас|и\s+на\s+|и\s+в\s+|мы\s+тоже|я\s+тоже|мы\s+уже|[🤐\U0001f910]+)|"
-    r"\b(?:тоже|также|так\s+же|аналогично|однозначно|согласен|согласна|согласны|точно|факт|плюсую|\+1|поддерживаю)\b|"
-    r"^да[.,!\s]+(?:именно|точно|согласен|конечно|так|правда))",
+    r"(?:^(?:и\s+у\s+меня|и\s+у\s+нас|и\s+на\s+|и\s+в\s+|мы\s+тоже|я\s+тоже|мы\s+уже|я\s+с\s+вами|мы\s+с\s+вами|мы\s+уже\s+предложили|[🤐\U0001f910]+)|"
+    r"\b(?:тоже|также|так\s+же|аналогично|однозначно|согласен|согласна|согласны|соглашусь|точно|факт|плюсую|поддерживаю|я\s+с\s+вами|мы\s+уже\s+предложили)\b|"
+    r"(?:\+1|\+\s*1)|"
+    r"^да[а!]*[.,!\s]+(?:именно|точно|согласен|конечно|так|правда)|"
+    r"^да{2,}!*)",
     re.IGNORECASE,
 )
 REACTION_POS_EXCLUSIONS = re.compile(
@@ -221,11 +241,27 @@ REACTION_POS_EXCLUSIONS = re.compile(
 )
 
 
+def is_context_reaction(text: str, max_words: int = 6) -> bool:
+    """Проверка, является ли текст короткой репликой-реакцией/согласием."""
+    if not text or pd.isna(text):
+        return False
+    t = str(text).strip()
+    t = re.sub(r"\s+([.,!?])", r"\1", t)
+    t = re.sub(r"([.,!?])([а-яёА-ЯЁa-zA-Z0-9])", r"\1 \2", t)
+    words = t.split()
+    if len(words) > max_words:
+        return False
+    if REACTION_POS_EXCLUSIONS.search(t):
+        return False
+    return bool(REACTION_PATTERNS.search(t))
+
+
 def enrich_chat_context(
     df: pd.DataFrame,
     max_time_diff_sec: float = 300.0,
-    max_words: int = 5,
-) -> pd.Series:
+    max_words: int = 6,
+    return_reaction_flags: bool = False,
+) -> pd.Series | tuple[pd.Series, pd.Series]:
     """Обогащение коротких реплик-реакций контекстом предыдущего сообщения из того же чата.
 
     Если сообщение является короткой репликой-согласием/реакцией (до max_words слов),
@@ -235,13 +271,17 @@ def enrich_chat_context(
     Args:
         df: DataFrame с колонками text, и опционально chat_id, timestamp.
         max_time_diff_sec: Максимальная разница во времени между репликами (по умолчанию 300 сек).
-        max_words: Максимальная длина реплики-реакции для обогащения (по умолчанию 5 слов).
+        max_words: Максимальная длина реплики-реакции для обогащения (по умолчанию 6 слов).
+        return_reaction_flags: Если True, возвращает кортеж (enriched_text, is_reaction).
 
     Returns:
-        pd.Series обогащенных текстов в исходном порядке строк df.
+        pd.Series обогащенных текстов в исходном порядке строк df (или кортеж Series).
     """
     if "text" not in df.columns or "chat_id" not in df.columns or "timestamp" not in df.columns:
-        return df["text"] if "text" in df.columns else pd.Series(dtype=object)
+        res = df["text"] if "text" in df.columns else pd.Series(dtype=object)
+        if return_reaction_flags:
+            return res, pd.Series(False, index=res.index)
+        return res
 
     work_df = df[["chat_id", "timestamp", "text"]].copy()
     work_df["_orig_idx"] = work_df.index
@@ -254,24 +294,28 @@ def enrich_chat_context(
     work_df["time_diff_sec"] = (timestamps - prev_timestamps).dt.total_seconds()
 
     enriched = []
+    is_reaction = []
     for idx, row in work_df.iterrows():
         curr = str(row["text"]).strip() if pd.notna(row["text"]) else ""
         prev = str(row["prev_text"]).strip() if pd.notna(row["prev_text"]) else ""
         dt = row["time_diff_sec"]
 
-        if (
-            prev
+        flag = (
+            bool(prev)
             and pd.notna(dt)
             and dt < max_time_diff_sec
-            and len(curr.split()) <= max_words
-            and REACTION_PATTERNS.search(curr)
-            and not REACTION_POS_EXCLUSIONS.search(curr)
-        ):
+            and is_context_reaction(curr, max_words=max_words)
+        )
+        is_reaction.append(flag)
+        if flag:
             enriched.append(f"{curr} [Контекст: {prev}]")
         else:
             enriched.append(curr)
 
     work_df["enriched_text"] = enriched
+    work_df["is_reaction"] = is_reaction
     work_df = work_df.sort_values("_orig_idx").reset_index(drop=True)
+    if return_reaction_flags:
+        return work_df["enriched_text"], work_df["is_reaction"]
     return work_df["enriched_text"]
 

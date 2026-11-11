@@ -10,8 +10,61 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
+from src.report.confidence import enrich_daily_with_confidence
+
+
+def _build_chat_scatter_trace(chat_id: str, group: pd.DataFrame, color: str) -> go.Scatter:
+    """Построение интерактивной линии настроения для одного чата с ДИ."""
+    hover_template = (
+        f"<b>Чат {chat_id}</b><br>"
+        + "Дата: %{x|%Y-%m-%d}<br>"
+        + "Индекс настроения: <b>%{y:.2f}</b><br>"
+        + "95% ДИ настроения: [%{customdata[2]:.2f} ... %{customdata[3]:.2f}]<br>"
+        + "Сглаженный индекс: %{customdata[4]:.2f}<br>"
+        + "Сообщений жителей: %{customdata[0]}<br>"
+        + "Негатив: %{customdata[1]:.1%} (ДИ: [%{customdata[5]:.1%} ... %{customdata[6]:.1%}])"
+        + "%{customdata[7]}"
+        + "<extra></extra>"
+    )
+
+    badge_col = [
+        "<br><span style='color:#f59e0b;font-weight:bold;'>⚠️ Малый объём данных (n < 5)</span>"
+        if lv else ""
+        for lv in group["is_low_volume"]
+    ]
+
+    customdata = list(zip(
+        group["n_resident"],
+        group["negative_share"],
+        group["mood_ci_lower"],
+        group["mood_ci_upper"],
+        group["mood_smoothed"],
+        group["neg_ci_lower"],
+        group["neg_ci_upper"],
+        badge_col,
+    ))
+
+    marker_symbols = ["circle-open" if lv else "circle" for lv in group["is_low_volume"]]
+    marker_sizes = [9 if lv else 7 for lv in group["is_low_volume"]]
+
+    return go.Scatter(
+        x=group["date"],
+        y=group["mood_index"],
+        mode="lines+markers",
+        name=f"Чат {chat_id}",
+        line=dict(color=color, width=2.5),
+        marker=dict(
+            size=marker_sizes,
+            symbol=marker_symbols,
+            line=dict(width=2, color=color),
+        ),
+        customdata=customdata,
+        hovertemplate=hover_template,
+    )
+
+
 def build_mood_dynamics_figure(daily_df: pd.DataFrame) -> go.Figure:
-    """Интерактивный график динамики индекса настроения (mood_index) по чатам."""
+    """Интерактивный график динамики индекса настроения (mood_index) по чатам с ДИ."""
     fig = go.Figure()
 
     if daily_df.empty or "mood_index" not in daily_df.columns:
@@ -19,6 +72,9 @@ def build_mood_dynamics_figure(daily_df: pd.DataFrame) -> go.Figure:
         return fig
 
     clean_df = daily_df.dropna(subset=["mood_index"]).copy()
+    if "mood_ci_lower" not in clean_df.columns or "is_low_volume" not in clean_df.columns:
+        clean_df = enrich_daily_with_confidence(clean_df)
+
     clean_df["date"] = pd.to_datetime(clean_df["date"])
     clean_df = clean_df.sort_values(by=["chat_id", "date"])
 
@@ -40,31 +96,13 @@ def build_mood_dynamics_figure(daily_df: pd.DataFrame) -> go.Figure:
 
     for idx, (chat_id, group) in enumerate(clean_df.groupby("chat_id")):
         color = colors[idx % len(colors)]
-        hover_template = (
-            f"<b>Чат {chat_id}</b><br>"
-            + "Дата: %{x|%Y-%m-%d}<br>"
-            + "Индекс настроения: %{y:.2f}<br>"
-            + "Сообщений жителей: %{customdata[0]}<br>"
-            + "Негатив: %{customdata[1]:.1%}<extra></extra>"
-        )
-
-        customdata = group[["n_resident", "negative_share"]].values
-
-        fig.add_trace(
-            go.Scatter(
-                x=group["date"],
-                y=group["mood_index"],
-                mode="lines+markers",
-                name=f"Чат {chat_id}",
-                line=dict(color=color, width=2.5),
-                marker=dict(size=7),
-                customdata=customdata,
-                hovertemplate=hover_template,
-            )
-        )
+        fig.add_trace(_build_chat_scatter_trace(str(chat_id), group, color))
 
     fig.update_layout(
-        title=dict(text="<b>Динамика индекса настроения жителей по дням</b>", font=dict(size=16)),
+        title=dict(
+            text="<b>Динамика индекса настроения жителей по дням</b><br><span style='font-size:12px;color:#64748b;'>Сплошные маркеры: n ≥ 5 · Полые маркеры (◯): малый объём (n &lt; 5, повышена дисперсия) · Тултип: 95% ДИ Вильсона и Дирихле</span>",
+            font=dict(size=16),
+        ),
         xaxis=dict(title="Дата", gridcolor="#f1f5f9"),
         yaxis=dict(
             title="Индекс настроения (от -1.0 до +1.0)",
@@ -75,8 +113,8 @@ def build_mood_dynamics_figure(daily_df: pd.DataFrame) -> go.Figure:
         paper_bgcolor="#ffffff",
         hovermode="closest",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=50, r=30, t=60, b=50),
-        height=420,
+        margin=dict(l=50, r=30, t=75, b=50),
+        height=440,
     )
     return fig
 

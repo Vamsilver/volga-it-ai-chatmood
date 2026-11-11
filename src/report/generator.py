@@ -14,6 +14,7 @@ from src.report.charts import (
     build_mood_heatmap_figure,
     build_sentiment_breakdown_figure,
 )
+from src.report.confidence import calculate_confidence_kpi
 
 TOPIC_KEYWORDS: dict[str, list[str]] = {
     "вода": ["вода", "горяч", "холодн", "напор", "давлен", "кипяток", "кран", "протеч"],
@@ -48,6 +49,7 @@ def load_report_datasets(
 def calculate_report_kpi(
     summary_df: pd.DataFrame,
     messages_df: pd.DataFrame,
+    daily_df: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """Расчет сводных показателей качества и социального климата для шапки отчёта."""
     total_msgs = len(messages_df)
@@ -61,6 +63,13 @@ def calculate_report_kpi(
     pos_count = (res_df["sentiment"] == "positive").sum() if "sentiment" in res_df.columns else 0
 
     global_mood = (pos_count - neg_count) / max(n_res, 1)
+
+    conf_kpi = calculate_confidence_kpi(daily_df) if daily_df is not None else {
+        "low_volume_days": 0,
+        "low_volume_share": 0.0,
+        "total_days": 0,
+        "reliable_days": 0,
+    }
 
     return {
         "total_messages": total_msgs,
@@ -76,6 +85,10 @@ def calculate_report_kpi(
         "worsening_count": (summary_df["trend"] == "worsening").sum(),
         "stable_count": (summary_df["trend"] == "stable").sum(),
         "improving_count": (summary_df["trend"] == "improving").sum(),
+        "low_volume_days": conf_kpi["low_volume_days"],
+        "low_volume_share": conf_kpi["low_volume_share"],
+        "total_days": conf_kpi["total_days"],
+        "reliable_days": conf_kpi["reliable_days"],
     }
 
 
@@ -171,7 +184,7 @@ def generate_html_report(
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
     summary_df, daily_df, messages_df = load_report_datasets(pred_dir, messages_path)
-    kpi = calculate_report_kpi(summary_df, messages_df)
+    kpi = calculate_report_kpi(summary_df, messages_df, daily_df=daily_df)
     incident_data = extract_incident_cards(summary_df, daily_df, messages_df)
 
     # Построение графиков

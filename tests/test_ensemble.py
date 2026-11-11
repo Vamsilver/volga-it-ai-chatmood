@@ -195,6 +195,73 @@ class TestEnsembleClassifier(unittest.TestCase):
             self.assertEqual(preds.iloc[i]["sentiment"], "positive")
             self.assertEqual(preds.iloc[i]["aggression"], 0)
 
+    def test_aggression_threshold_calibration(self):
+        """Проверка калибровки порога детекции агрессии (0.80)."""
+        ensemble = EnsembleClassifier()
+        self.assertEqual(ensemble.aggression_threshold, 0.80)
+
+    def test_extended_insult_overrides(self):
+        """Проверка расширенных паттернов оскорблений и личных выпадов."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        insult_msgs = [
+            "Какие родители, такие дети!!!",
+            "По глупости ничего не сделали",
+            "Кто Вас вообще в совет дома включил?",
+            "Какая чистота у Вас дома, страшно подумать",
+        ]
+        preds = ensemble.predict(insult_msgs)
+        for i in range(len(insult_msgs)):
+            self.assertEqual(preds.iloc[i]["sentiment"], "negative")
+            self.assertEqual(preds.iloc[i]["aggression"], 1)
+
+    def test_extended_sarcasm_and_neutral_structural(self):
+        """Проверка расширенных паттернов сарказма и нейтральных советов."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        sarcasm_msgs = [
+            "Кактус конечно важнее.",
+            "Открою вам тайну для вас, трубы общие.",
+            "Наверное это проклятие 17 этажей.",
+        ]
+        preds = ensemble.predict(sarcasm_msgs)
+        for i in range(len(sarcasm_msgs)):
+            self.assertEqual(preds.iloc[i]["sentiment"], "negative")
+
+        neutral_msgs = [
+            "Если вам позвонят - вы хоть не вздумайте)",
+            "Потому что второй видимо сломан))",
+        ]
+        preds_neu = ensemble.predict(neutral_msgs)
+        for i in range(len(neutral_msgs)):
+            self.assertEqual(preds_neu.iloc[i]["sentiment"], "neutral")
+
+    def test_context_sentiment_propagation(self):
+        """Проверка наследования тональности в диалогах чата."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        df = pd.DataFrame({
+            "message_id": ["m1", "m2", "m3"],
+            "chat_id": ["c1", "c1", "c1"],
+            "timestamp": [
+                "2026-07-10 14:21:00",
+                "2026-07-10 14:21:40",  # +40s, согласие с жалобой
+                "2026-07-10 14:22:10",  # +30s, реакция +1
+            ],
+            "text": [
+                "4 парадная, ступеньки в критическом состоянии, сделайте ремонт ступеней!",
+                "2парадная ,аналогично",
+                "+1",
+            ]
+        })
+        preds = ensemble.predict_messages(df)
+        self.assertEqual(preds.iloc[0]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[1]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[2]["sentiment"], "negative")
+
 
 if __name__ == "__main__":
     unittest.main()

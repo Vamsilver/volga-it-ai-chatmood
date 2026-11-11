@@ -2,6 +2,7 @@
 # AI internal operational context (doc-craft & graphify)
 .context/
 graphify-out/
+.agents/
 
 # Python
 __pycache__/

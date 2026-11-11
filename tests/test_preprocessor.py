@@ -133,6 +133,38 @@ class TestTextPreprocessor(unittest.TestCase):
         self.assertIn("отопление", cleaned)
         self.assertIn("отключено", cleaned)
 
+    def test_extended_jkh_and_emoji(self):
+        """Проверка расширенных словарей ЖКХ и эмодзи."""
+        text = "Провели ОСС, передали в АДС и Квадо 🫶. Но в 3 парадная нарки все сломали 🤐😭"
+        cleaned = self.preprocessor.clean_text(text)
+        self.assertIn("общее собрание собственников", cleaned)
+        self.assertIn("аварийно диспетчерская служба", cleaned)
+        self.assertIn("система заявок", cleaned)
+        self.assertIn("подъезд", cleaned)
+        self.assertIn("наркоманы", cleaned)
+        self.assertIn("[EMOJI_POS]", cleaned)
+        self.assertIn("[EMOJI_NEG]", cleaned)
+
+    def test_extended_typo_normalization(self):
+        """Проверка расширенных опечаток."""
+        text = "Мы добролись до навнодушнего соседа, поаравтлиа замок, сабака спит."
+        cleaned = self.preprocessor.clean_text(text)
+        self.assertIn("добрались", cleaned)
+        self.assertIn("равнодушного", cleaned)
+        self.assertIn("поправила", cleaned)
+        self.assertIn("собака", cleaned)
+
+    def test_is_context_reaction_and_stuck_punctuation(self):
+        """Проверка детекции реакций с прилипшей пунктуацией."""
+        from src.features.preprocessor import is_context_reaction
+        self.assertTrue(is_context_reaction("2парадная ,аналогично"))
+        self.assertTrue(is_context_reaction("Согласен"))
+        self.assertTrue(is_context_reaction("я с вами"))
+        self.assertTrue(is_context_reaction("+1"))
+        self.assertTrue(is_context_reaction("даааа!!"))
+        self.assertFalse(is_context_reaction("Спасибо огромное за оперативную помощь!"))
+        self.assertFalse(is_context_reaction("Это длинное сообщение с подробным описанием проблем в парадной"))
+
 
 if __name__ == "__main__":
     unittest.main()
