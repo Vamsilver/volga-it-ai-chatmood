@@ -58,6 +58,22 @@ class TestTextPreprocessor(unittest.TestCase):
         self.assertEqual(feats.iloc[1]["has_excl_high"], 1)
         self.assertEqual(feats.iloc[2]["has_emoji_neg"], 1)
 
+    def test_aggression_signal(self):
+        """Проверка детекции сигналов агрессии и оскорблений."""
+        df = pd.DataFrame({
+            "text": [
+                "Вы свою голову лучше включите!!!!!!!",
+                "Конченные люди",
+                "В Сосновом Бору все руко@опые",
+                "Спокойной ночи, соседи",
+            ]
+        })
+        feats = self.preprocessor.extract_features(df)
+        self.assertEqual(feats.iloc[0]["has_aggression_signal"], 1)
+        self.assertEqual(feats.iloc[1]["has_aggression_signal"], 1)
+        self.assertEqual(feats.iloc[2]["has_aggression_signal"], 1)
+        self.assertEqual(feats.iloc[3]["has_aggression_signal"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

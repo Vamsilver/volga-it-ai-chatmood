@@ -42,7 +42,7 @@ EMOJI_MAP = {
 
 # Паттерны обфусцированного и открытого мата
 OBSCENE_PATTERNS = [
-    r"руко[@оo][пp][ые]",
+    r"руко[@оoж\*\.]+[пp][ыеа-яё]*",
     r"\b[пp][иеe][пp]ец\b",
     r"\b[нn]аср[уеёя][тм]\b",
     r"\bср[её]м\b",
@@ -52,6 +52,13 @@ OBSCENE_PATTERNS = [
     r"[хx][\.\*@#]{1,4}",
     r"[бb][\.\*@#]{1,4}",
     r"[пp][\.\*@#]{1,4}[еe]ц",
+]
+
+# Паттерны прямых оскорблений, хамства, перехода на личности и угроз
+AGGRESSION_PATTERNS = [
+    r"\b(?:конченн[а-яё]*|ублюд[а-яё]*|дебил[а-яё]*|придур[а-яё]*|идиот[а-яё]*|тварь[а-яё]*|мраз[а-яё]*|гнид[а-яё]*|чмо[а-яё]*|недоносок[а-яё]*|упыр[а-яё]*|отребь[а-яё]*|быдл[а-яё]*|сволоч[а-яё]*|сук[а-яё]*)\b",
+    r"(?:(?:голову|мозги)[^.!?\n]{0,25}включи|включи[^.!?\n]{0,25}(?:голову|мозги)|рот\s+закрой|закрой\s+рот|заткни[а-яё]*|молчал[а-яё]*\s+бы|недержание\s+во\s+рту)",
+    r"(?:тебе\s+п[\.\*a-яё]*ц|слышишь\s+меня|морду\s+набью|руки\s+оторв[а-яё]*|посад[а-яё]*\s+этого)",
 ]
 
 
@@ -74,6 +81,7 @@ class TextPreprocessor:
         self.jkh_compiled = [(re.compile(p, re.IGNORECASE), repl) for p, repl in JKH_VOCABULARY.items()]
         self.emoji_compiled = [(re.compile(p), repl) for p, repl in EMOJI_MAP.items()]
         self.obscene_compiled = [re.compile(p, re.IGNORECASE) for p in OBSCENE_PATTERNS]
+        self.aggression_compiled = [re.compile(p, re.IGNORECASE) for p in AGGRESSION_PATTERNS]
         self.marker_regex = re.compile(r"(\[(?:имя|телефон|адрес|квартира|грз|email|ссылка|ник|номер)\])", re.IGNORECASE)
 
     def clean_text(self, text: str) -> str:
@@ -149,6 +157,12 @@ class TextPreprocessor:
         feats["has_emoji_pos"] = cleaned.str.contains(r"\[EMOJI_POS\]").astype(int)
         feats["has_emoji_neg"] = cleaned.str.contains(r"\[EMOJI_NEG\]").astype(int)
         feats["has_emoji_laugh"] = cleaned.str.contains(r"\[EMOJI_LAUGH\]").astype(int)
+
+        # Сигналы агрессии (оскорбления, переход на личности, угрозы или мат)
+        has_aggr = feats["has_obscene"].copy()
+        for pattern in self.aggression_compiled:
+            has_aggr = has_aggr | raw_texts.apply(lambda s: 1 if pattern.search(s) else 0)
+        feats["has_aggression_signal"] = has_aggr.astype(int)
 
         # Экспрессия
         feats["has_excl_high"] = cleaned.str.contains(r"\[EXCL_HIGH\]").astype(int)
