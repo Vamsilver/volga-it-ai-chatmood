@@ -1,29 +1,16 @@
-"""Ансамбль моделей классификации сообщений домовых чатов.
-
-Объединяет:
-1. BaselineClassifier (TF-IDF + LogisticRegression) — быстрый и точный на служебных сообщениях и лексике
-2. TransformerPipeline (MultiTaskRuBertTiny) — глубокий контекст, семантика и скрытые интонации
-3. Модуль разрешения сложных кейсов (hardcases):
-   - обсценная лексика и обфусцированный мат
-   - сарказм и ирония (смех при авариях и претензиях)
-   - смешанная тональность (mixed)
-   - экспрессия (CAPS LOCK, восклицания)
-
-Строго соблюдает доменные инварианты разметки:
-- is_service == 1 -> sentiment = 'neutral', aggression = 0
-- sentiment != 'negative' -> aggression = 0
+"""Ансамбль моделей классификации сообщений домовых чатов (Volga-IT 2026).
+Объединяет BaselineClassifier, TransformerPipeline и доменные правила с инвариантами.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any, Sequence
+import re
 
 import joblib
 import numpy as np
 import pandas as pd
-
-import re
 
 from src.features.preprocessor import TextPreprocessor, enrich_chat_context, is_context_reaction
 from src.models.baseline import BaselineClassifier
@@ -37,12 +24,9 @@ INSULT_OVERRIDE_PATTERNS = [
         r"\b(?:конченн[а-яё]*|ублюд[а-яё]*|дебил[а-яё]*|придур[а-яё]*|идиот[а-яё]*|тварь[а-яё]*|мраз[а-яё]*|гнид[а-яё]*|чмо[а-яё]*|недоносок[а-яё]*|упыр[а-яё]*|отребь[а-яё]*|быдл[а-яё]*|сволоч[а-яё]*|руко[@оoж\*\.]+[пp][ыеа-яё]*|клоун[а-яё]*|маргинал[а-яё]*)\b",
         r"(?:(?:голову|мозги)[^.!?\n]{0,25}включи|включи[^.!?\n]{0,25}(?:голову|мозги)|рот\s+закрой|закрой\s+рот|заткни[а-яё]*|молчал[а-яё]*\s+бы|недержание\s+во\s+рту|метать\s+бисер|🐖)",
         r"(?:тебе\s+п[\.\*a-яё]*ц|слышишь\s+меня|морду\s+набью|руки\s+оторв[а-яё]*|посад[а-яё]*\s+этого)",
-        r"\b(?:[сs]р[ауе][тм]|засрал[а-яё]*|обосрал[а-яё]*|насрал[а-яё]*)\b",
-        r"\bпо\s+глупости\b",
-        r"\bкакие\s+родители,\s+такие\s+дети\b",
-        r"\bкто\s+вас\s+вообще\b",
-        r"\bобъяснять\s+вам\s+нет\s+смысла\b",
-        r"\bчистота\s+у\s+вас\s+дома\b",
+        r"\b(?:[сs]р[ауе][тм]|засрал[а-яё]*|обосрал[а-яё]*|насрал[а-яё]*|[нn]аср[уеёя][тм]|заср[уеёя][тм]|обоср[уеёя][тм])\b",
+        r"\bвы\s+колясочник\?", r"\bпо\s+глупости\b", r"\bкакие\s+родители,\s+такие\s+дети\b",
+        r"\bкто\s+вас\s+вообще\b", r"\bобъяснять\s+вам\s+нет\s+смысла\b", r"\bчистота\s+у\s+вас\s+дома\b",
         r"\bнормальный\s+человек[^.!?\n]{0,30}не\s+додумался\b",
     ]
 ]
@@ -50,12 +34,10 @@ INSULT_OVERRIDE_PATTERNS = [
 # Паттерны официальных рассылок УК и Госуслуг (is_service = 1)
 SERVICE_STRONG_PATTERNS = [
     re.compile(p, re.IGNORECASE) for p in [
-        r"госуслуги\s+дом", r"счета\s+за\s+[а-яё]+\s+уже\s+доступны",
-        r"уважаемые\s+жители", r"уважаемые\s+собственники",
-        r"аварийно-восстановительн", r"лифт\s+остановлен\s+на\s+ремонт",
-        r"треб(?:уется)?\s+доступ\s+в\s+\[квартира\]", r"график\s+отключения",
-        r"плановое\s+отключение", r"гидравлические\s+испытания",
-        r"поверка\s+(?:счетчиков|ипу|одпу)", r"официальное\s+уведомление",
+        r"госуслуги\s+дом", r"счета\s+за\s+[а-яё]+\s+уже\s+доступны", r"уважаемые\s+жители",
+        r"уважаемые\s+собственники", r"аварийно-восстановительн", r"лифт\s+остановлен\s+на\s+ремонт",
+        r"треб(?:уется)?\s+доступ\s+в\s+\[квартира\]", r"график\s+отключения", r"плановое\s+отключение",
+        r"гидравлические\s+испытания", r"поверка\s+(?:счетчиков|ипу|одпу)", r"официальное\s+уведомление",
         r"прием\s+граждан", r"информируем\s+вас",
     ]
 ]
@@ -65,9 +47,8 @@ RESIDENT_NOT_SERVICE_PATTERNS = [
     re.compile(r"уважаемый\s+представитель\s+ук", re.IGNORECASE),
     re.compile(r"\bсоседи[,!?\s]", re.IGNORECASE),
     re.compile(
-        r"(?:в\s+личку|мне\s+в\s+лс|дозвониться\s+не|оставил[а-яё]*\s+заявк|"
-        r"прошу\s+оперативно|кто\s+потерял|чей\s+(?:кот|пес|велосипед|ключ)|"
-        r"чья\s+машина|у\s+всех\s+(?:есть|нет))",
+        r"(?:в\s+личку|мне\s+в\s+лс|дозвониться\s+не|оставил[а-яё]*\s+заявк|прошу\s+оперативно|"
+        r"кто\s+потерял|чей\s+(?:кот|пес|велосипед|ключ)|чья\s+машина|у\s+всех\s+(?:есть|нет))",
         re.IGNORECASE,
     ),
 ]
@@ -81,19 +62,40 @@ SARCASM_STRONG_PATTERNS = [
         r"сэкономили\)+", r"ну\s+естественно\s*[\U0001f609\)]+",
         r"красот[а-яё]*[\s\S]{0,80}(?:принять\s+меры|примите\s+меры|устраните|обращаюсь\s+к\s+ук)",
         r"переда[юе][а-яё]*\s+(?:огромн[а-яё]*\s+)?привет[^.!?\n]{1,80}(?:кидал|бросал|насрал|сломал|разбил|свинь|балкон)",
-        r"отписыва[йт][а-яё]*\s+дальше",
+        r"отписыва[йт][а-яё]*\s+дальше", r"\bжмуркино\b",
         r"(?:конечно\s+важнее|важнее\s+конечно|ступен[а-яё]+\s+на\s+крыльце\s+важнее)",
         r"открою\s+(?:вам\s+)?тайну", r"\bпрокляти[ея]\s+\d+\s+этаж",
-        r"из\s+какой\s+(?:еще|ещё)\s+управы", r"\bжмуркино\b",
-        r"\bвы\s+колясочник\?", r"\bв\s+критическом\s+состоянии\b",
+        r"из\s+какой\s+(?:еще|ещё)\s+управы", r"\bв\s+критическом\s+состоянии\b",
+        r"\bвы\s+колясочник\?", r"\bв\s+явных\s+лидерах\b", r"\bв\s+отпуске\s+наверное\b",
+        r"\bкуда\s+тогда\s+(?:за\s+квартплату\s+)?уходят\s+денежки\b",
+        r"\bне\s+царское\s+это\s+дело\b", r"\bвы\s+решили\s+поюморить\b",
     ]
 ]
 
-# Структурные паттерны нейтральных объяснений и предостережений (не сарказм и не жалоба)
+# Паттерны смешанной тональности (уступка в начале, претензия после 'но')
+MIXED_NEGATIVE_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"спасибо[^.!?\n]{0,30}[.,!?\s]+(?:но\s+|однако\s+|почему\s+|только\s+|хотя\s+|а\s+толку)",
+        r"(?:^|[.,!?\s])но\s+(?:системно\s+ничего\s+не|толку\s+нет|вс[её]\s+равно\s+не|лучше\s+не\s+стало|проблема\s+осталась)",
+        r"вода\s+есть[^.!?\n]*(?:вонюч|ржав|грязн|ж[её]лт|холодн|кипяток)",
+        r"(?:конечно\s+хорошо|понима[а-яё]+|убрали|сделали|почистил[а-яё]*)[^.!?\n]*[.,!?\s]+но\s+[^.!?\n]*(?:системно|ничего\s+не|важнее|проблем|сломал|не\s+работ|хуже|толку|гряз|опасн)",
+    ]
+]
+
+# Паттерны риторических и конфликтных вопросов жителей
+RHETORICAL_QUESTION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"\bдо\s+каких\s+пор\b", r"\bза\s+что\s+мы\s+платим\b", r"\bзачем\s+тогда\s+платить\b",
+        r"\bчто\s+жд[её]т\s+ук\b", r"\bдля\s+кого\s+(?:вы\s+)?это\s+пиш[еи]те\b",
+        r"\bваши\s+предложения\?+\s*вы\s+(?:конкретно|конечно)[^?]*предлагаете\b",
+    ]
+]
+
+# Структурные паттерны нейтральных объяснений и предостережений
 NEUTRAL_EXPLANATION_PATTERNS = [
-    re.compile(r"\b(?:вы\s+хоть\s+)?не\s+вздумайте\b", re.IGNORECASE),
-    re.compile(r"^потому\s+что\s+[^.!?\n]{1,50}\)+$", re.IGNORECASE),
-    re.compile(r"\bинтересно,\s+а\s+почему\b", re.IGNORECASE),
+    re.compile(p, re.IGNORECASE) for p in [
+        r"\b(?:вы\s+хоть\s+)?не\s+вздумайте\b", r"^потому\s+что\s+[^.!?\n]{1,50}\)+$", r"\bинтересно,\s+а\s+почему\b",
+    ]
 ]
 
 STANDALONE_NEG_EMOJIS = re.compile(r"^[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱😳🤐😩😫😭🤢\s!]+$")
@@ -101,7 +103,8 @@ STANDALONE_POS_EMOJIS = re.compile(r"^[👍🙏👌👏🎉🌸❤️😀😁�
 
 # Сильные маркеры явного позитива (преодоление недооценки редкого класса)
 STRONG_POSITIVE_PATTERNS = [
-    re.compile(r"\b(?:обалденн[а-яё]*|вкусн[а-яё]*|милот[а-яё]*|прекрасн[а-яё]*|замечательн[а-яё]*|поздравл[а-яё]*|ура[!.]*)\b", re.IGNORECASE),
+    re.compile(r"\b(?:обалденн[а-яё]*|вкусн[а-яё]*|милот[а-яё]*|замечательн[а-яё]*|поздравл[а-яё]*|ура[!.]*)\b", re.IGNORECASE),
+    re.compile(r"(?<!понима[а-яё]\s)\bпрекрасн[а-яё]*(?!\s+понима[а-яё])\b", re.IGNORECASE),
     re.compile(r"\b(?:красот[а-яё]+|сочн[а-яё]+|аппетитн[а-яё]*|восхитительн[а-яё]*)\b", re.IGNORECASE),
     re.compile(r"\b(?:бог\s+в\s+помощь|рад[аы]\s+за\s+вас|на\s+вашей\s+стороне|уважени[ея]\s+к\s+соседям|без\s+проблем|с\s+удовольствием|всегда\s+пожалуйста)\b", re.IGNORECASE),
     re.compile(r"спасибо\s+неравнодушн", re.IGNORECASE),
@@ -116,38 +119,20 @@ class EnsembleClassifier:
         baseline: BaselineClassifier | None = None,
         transformer: TransformerPipeline | None = None,
         preprocessor: TextPreprocessor | None = None,
-        weight_service: float = 0.15,
+        weight_service: float = 0.10,
         weight_sentiment: float = 0.45,
         weight_aggression: float = 0.50,
-        aggression_threshold: float = 0.80,
+        aggression_threshold: float = 0.78,
         service_threshold: float = 0.70,
         obscene_sent_boost: float = 0.20,
         obscene_agg_boost: float = 0.15,
     ) -> None:
-        """Инициализация ансамбля.
-
-        Args:
-            baseline: Экземпляр BaselineClassifier.
-            transformer: Экземпляр TransformerPipeline (опционально).
-            preprocessor: Экземпляр TextPreprocessor.
-            weight_service: Вес трансформера для задачи is_service (остальное - бейслайн).
-            weight_sentiment: Вес трансформера для задачи sentiment.
-            weight_aggression: Вес трансформера для задачи aggression.
-            aggression_threshold: Порог вероятности для бинарной детекции агрессии.
-            service_threshold: Порог вероятности для бинарной детекции служебных сообщений.
-            obscene_sent_boost: Добавка к вероятности негатива при наличии мата.
-            obscene_agg_boost: Добавка к вероятности агрессии при наличии мата.
-        """
-        self.baseline = baseline
-        self.transformer = transformer
+        self.baseline, self.transformer = baseline, transformer
         self.preprocessor = preprocessor or TextPreprocessor()
-        self.weight_service = float(weight_service)
-        self.weight_sentiment = float(weight_sentiment)
-        self.weight_aggression = float(weight_aggression)
-        self.aggression_threshold = float(aggression_threshold)
+        self.weight_service, self.weight_sentiment = float(weight_service), float(weight_sentiment)
+        self.weight_aggression, self.aggression_threshold = float(weight_aggression), float(aggression_threshold)
         self.service_threshold = float(service_threshold)
-        self.obscene_sent_boost = float(obscene_sent_boost)
-        self.obscene_agg_boost = float(obscene_agg_boost)
+        self.obscene_sent_boost, self.obscene_agg_boost = float(obscene_sent_boost), float(obscene_agg_boost)
 
     def fit(
         self,
@@ -262,12 +247,13 @@ class EnsembleClassifier:
         neg_emoji_mask = (has_emoji_neg == 1) & (has_emoji_pos == 0)
         p_sent[neg_emoji_mask, 0] += 0.25
 
-        pos_emoji_mask = (has_emoji_pos == 1) & (has_emoji_neg == 0) & (has_emoji_laugh == 0)
+        pos_emoji_mask = (has_emoji_pos == 1) & (has_emoji_neg == 0)
         p_sent[pos_emoji_mask, 2] += 0.25
 
         # Хардкейс 2: Сарказм (смех при негативном контексте или претензии с вопросами/восклицаниями)
-        sarcasm_mask = (has_emoji_laugh == 1) & (
-            (base_probs["sentiment"][:, 0] > 0.25) | (has_excl == 1) | (has_quest == 1)
+        sarcasm_mask = (has_emoji_laugh == 1) & (has_emoji_pos == 0) & (
+            (base_probs["sentiment"][:, 0] > 0.42) |
+            ((base_probs["sentiment"][:, 0] > 0.35) & ((has_excl == 1) | (has_quest == 1)))
         )
         p_sent[sarcasm_mask, 0] += 0.15
 
@@ -320,20 +306,23 @@ class EnsembleClassifier:
         """Применение семантических оверрайдов для сообщений жителей."""
         if not text:
             return sent, agg
-
-        if any(p.search(text) for p in INSULT_OVERRIDE_PATTERNS):
+        t_clean = re.sub(r"\s*\[Контекст:[^\]]*\]", "", text).strip()
+        if any(p.search(t_clean) for p in INSULT_OVERRIDE_PATTERNS):
             return "negative", 1
-        if STANDALONE_NEG_EMOJIS.match(text):
+        if STANDALONE_NEG_EMOJIS.match(t_clean):
             return "negative", agg
-        if STANDALONE_POS_EMOJIS.match(text):
+        if STANDALONE_POS_EMOJIS.match(t_clean):
             return "positive", 0
-        if any(p.search(text) for p in NEUTRAL_EXPLANATION_PATTERNS):
+        if any(p.search(t_clean) for p in NEUTRAL_EXPLANATION_PATTERNS):
             return "neutral", 0
-        if any(p.search(text) for p in SARCASM_STRONG_PATTERNS):
+        if any(p.search(t_clean) for p in MIXED_NEGATIVE_PATTERNS):
             return "negative", agg
-        if any(p.search(text) for p in STRONG_POSITIVE_PATTERNS) and not any(p.search(text) for p in SARCASM_STRONG_PATTERNS):
+        if any(p.search(t_clean) for p in SARCASM_STRONG_PATTERNS):
+            return "negative", agg
+        if any(p.search(t_clean) for p in RHETORICAL_QUESTION_PATTERNS):
+            return "negative", agg
+        if any(p.search(t_clean) for p in STRONG_POSITIVE_PATTERNS) and not any(p.search(t_clean) for p in SARCASM_STRONG_PATTERNS):
             return "positive", 0
-
         return sent, agg
 
     def _propagate_context_sentiment(
@@ -341,7 +330,8 @@ class EnsembleClassifier:
         messages_df: pd.DataFrame,
         preds_df: pd.DataFrame,
         max_time_diff_sec: float = 300.0,
-        max_words: int = 6,
+        max_words: int = 12,
+        lookback_window: int = 3,
     ) -> pd.DataFrame:
         """Контекстное распространение тональности на короткие реплики-реакции и саркастические смайлы."""
         if "chat_id" not in messages_df.columns or "timestamp" not in messages_df.columns:
@@ -357,30 +347,46 @@ class EnsembleClassifier:
         work["ts"] = pd.to_datetime(work["timestamp"], errors="coerce")
         work = work.sort_values(["chat_id", "ts"]).reset_index(drop=True)
 
-        work["prev_sentiment"] = work.groupby("chat_id")["sentiment"].shift(1)
-        work["prev_is_service"] = work.groupby("chat_id")["is_service"].shift(1)
-        work["prev_ts"] = work.groupby("chat_id")["ts"].shift(1)
-        work["dt_sec"] = (work["ts"] - work["prev_ts"]).dt.total_seconds()
-
         new_sent = work["sentiment"].values.copy()
         for i in range(len(work)):
             if work.loc[i, "is_service"] == 1:
                 continue
-            curr_text = work.loc[i, "text"]
-            prev_sent = work.loc[i, "prev_sentiment"]
-            dt = work.loc[i, "dt_sec"]
+            curr_text = str(work.loc[i, "text"]).strip()
+            curr_ts = work.loc[i, "ts"]
+            curr_chat = work.loc[i, "chat_id"]
 
-            if pd.notna(prev_sent) and pd.notna(dt) and dt < max_time_diff_sec:
-                if is_context_reaction(curr_text, max_words=max_words):
+            is_react = is_context_reaction(curr_text, max_words=max_words)
+            is_laugh = bool(re.match(r"^[🤣😂😅😆🙃😏\s!]+$", curr_text))
+            if not (is_react or is_laugh):
+                continue
+
+            for step in range(1, lookback_window + 1):
+                prev_i = i - step
+                if prev_i < 0 or work.loc[prev_i, "chat_id"] != curr_chat:
+                    break
+                prev_ts = work.loc[prev_i, "ts"]
+                if pd.isna(curr_ts) or pd.isna(prev_ts):
+                    break
+                dt = (curr_ts - prev_ts).total_seconds()
+                if dt < 0 or dt > max_time_diff_sec:
+                    break
+
+                prev_sent = new_sent[prev_i]
+                prev_svc = work.loc[prev_i, "is_service"]
+                prev_txt = str(work.loc[prev_i, "text"])
+
+                if is_react:
                     if prev_sent == "negative":
                         new_sent[i] = "negative"
+                        break
                     elif prev_sent == "positive":
                         new_sent[i] = "positive"
-                elif re.match(r"^[🤣😂😅😆🙃😏\s!]+$", str(curr_text).strip()):
-                    prev_txt_str = str(work.loc[i - 1, "text"]) if i > 0 else ""
-                    is_admin_reply = bool(re.search(r"(?:обратитесь|заявк[а-яё]*|диспетчер|секретар|ук\b)", prev_txt_str, re.IGNORECASE))
-                    if work.loc[i, "prev_is_service"] == 1 or prev_sent == "negative" or is_admin_reply:
+                        break
+                elif is_laugh:
+                    is_admin_reply = bool(re.search(r"(?:обратитесь|заявк[а-яё]*|диспетчер|секретар|ук\b)", prev_txt, re.IGNORECASE))
+                    if prev_svc == 1 or prev_sent == "negative" or is_admin_reply:
                         new_sent[i] = "negative"
+                        break
 
         work["sentiment"] = new_sent
         work = work.sort_values("_orig_idx").reset_index(drop=True)
@@ -421,18 +427,10 @@ class EnsembleClassifier:
         aggression: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Принудительное приведение меток к непротиворечивому виду."""
-        sent_out = sentiment.copy()
-        agg_out = aggression.copy()
-
-        # Инвариант 1: Служебные сообщения всегда нейтральны и без агрессии
-        svc_mask = is_service == 1
-        sent_out[svc_mask] = "neutral"
-        agg_out[svc_mask] = 0
-
-        # Инвариант 2: Агрессия возможна исключительно при негативе
-        non_neg = sent_out != "negative"
-        agg_out[non_neg] = 0
-
+        sent_out, agg_out = sentiment.copy(), aggression.copy()
+        sent_out[is_service == 1] = "neutral"
+        agg_out[is_service == 1] = 0
+        agg_out[sent_out != "negative"] = 0
         return sent_out, agg_out
 
     def save(self, save_dir: str | Path) -> None:

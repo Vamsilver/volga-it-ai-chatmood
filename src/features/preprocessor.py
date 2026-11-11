@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from typing import Sequence
+import numpy as np
 import pandas as pd
 
 # Словарь аббревиатур и сленга ЖКХ
@@ -33,6 +34,33 @@ JKH_VOCABULARY = {
     r"\bпарадн[а-яё]+\b": "подъезд",
     r"\bразвоздуш[а-яё]+\b": "спустить воздух",
     r"\bнарк[а-яё]*\b": "наркоманы",
+    r"\bеирц\b": "расчетный центр",
+    r"\bтсн\b": "товарищество собственников недвижимости",
+    r"\bжск\b": "жилищный кооператив",
+    r"\bсои\b": "содержание общего имущества",
+    r"\bпдд\b": "правила движения",
+    r"\bуо\b": "управляющая организация",
+    r"\bмчс\b": "служба спасения",
+    r"\bстояк[а-яё]*\b": "трубопровод",
+    r"\bфанов[а-яё]+\s+труб[а-яё]*\b": "канализационная труба",
+    r"\bфанов[а-яё]+\b": "канализация",
+    r"\bтеплоносител[а-яё]*\b": "горячая вода отопления",
+    r"\bгреб[её]нк[а-яё]*\b": "распределительный коллектор",
+    r"\bприбор[а-яё]*\s+учет[а-яё]*\b": "счетчик",
+    r"\bпромывк[а-яё]*\b": "очистка системы",
+    r"\bстяжк[а-яё]*\b": "выравнивание пола",
+    r"\bкровл[а-яё]*\b": "крыша",
+    r"\bпухт[оа][а-яё]*\b": "мусорный контейнер",
+    r"\bпоребрик[а-яё]*\b": "бордюр",
+    r"\bукашк[а-яё]*\b": "управляющая компания",
+    r"\bкомм?\.?\s*услуг[а-яё]*\b": "коммунальные услуги",
+    r"\bнарик[а-яё]*\b": "наркоманы",
+    r"\bлифт[её]р[а-яё]*\b": "мастер по лифтам",
+    r"\bкозыр[её]к[а-яё]*\b": "навес подъезда",
+    r"\bпандус[а-яё]*\b": "съезд для колясок",
+    r"\bдоводчик[а-яё]*\b": "механизм двери",
+    r"\bщитов[а-яё]+\b": "электрощитовая",
+    r"\bзавоздуш[а-яё]+\b": "воздух в трубах",
 }
 
 # Семантические группы эмодзи
@@ -228,9 +256,10 @@ class TextPreprocessor:
 
 
 REACTION_PATTERNS = re.compile(
-    r"(?:^(?:и\s+у\s+меня|и\s+у\s+нас|и\s+на\s+|и\s+в\s+|мы\s+тоже|я\s+тоже|мы\s+уже|я\s+с\s+вами|мы\s+с\s+вами|мы\s+уже\s+предложили|[🤐\U0001f910]+)|"
-    r"\b(?:тоже|также|так\s+же|аналогично|однозначно|согласен|согласна|согласны|соглашусь|точно|факт|плюсую|поддерживаю|я\s+с\s+вами|мы\s+уже\s+предложили)\b|"
-    r"(?:\+1|\+\s*1)|"
+    r"(?:^(?:и\s+у\s+меня|и\s+у\s+нас|и\s+на\s+|и\s+в\s+|мы\s+тоже|я\s+тоже|у\s+нас\s+тоже|у\s+меня\s+тоже|мы\s+уже|я\s+с\s+вами|мы\s+с\s+вами|мы\s+уже\s+предложили|[🤐\U0001f910]+)|"
+    r"^(?:тоже|также|так\s+же|аналогично|однозначно|согласен|согласна|согласны|соглашусь|точно|факт|плюсую|поддерживаю|полностью\s+соглас[а-яё]*)\b|"
+    r"\b(?:аналогично|однозначно|плюсую|поддерживаю\s+сообщение|я\s+с\s+вами|мы\s+с\s+вами)\b|"
+    r"(?:\+1|\+\s*1)(?!\d)|"
     r"^да[а!]*[.,!\s]+(?:именно|точно|согласен|конечно|так|правда)|"
     r"^да{2,}!*)",
     re.IGNORECASE,
@@ -241,11 +270,13 @@ REACTION_POS_EXCLUSIONS = re.compile(
 )
 
 
-def is_context_reaction(text: str, max_words: int = 6) -> bool:
+def is_context_reaction(text: str, max_words: int = 12) -> bool:
     """Проверка, является ли текст короткой репликой-реакцией/согласием."""
     if not text or pd.isna(text):
         return False
     t = str(text).strip()
+    if "?" in t:
+        return False
     t = re.sub(r"\s+([.,!?])", r"\1", t)
     t = re.sub(r"([.,!?])([а-яёА-ЯЁa-zA-Z0-9])", r"\1 \2", t)
     words = t.split()
@@ -253,14 +284,17 @@ def is_context_reaction(text: str, max_words: int = 6) -> bool:
         return False
     if REACTION_POS_EXCLUSIONS.search(t):
         return False
+    if re.search(r"[😁😃😄😀🫶🥰😍🥳✨👍🙏👌👏🎉🌸❤️]", t):
+        return False
     return bool(REACTION_PATTERNS.search(t))
 
 
 def enrich_chat_context(
     df: pd.DataFrame,
     max_time_diff_sec: float = 300.0,
-    max_words: int = 6,
+    max_words: int = 12,
     return_reaction_flags: bool = False,
+    lookback_window: int = 3,
 ) -> pd.Series | tuple[pd.Series, pd.Series]:
     """Обогащение коротких реплик-реакций контекстом предыдущего сообщения из того же чата.
 
@@ -271,8 +305,9 @@ def enrich_chat_context(
     Args:
         df: DataFrame с колонками text, и опционально chat_id, timestamp.
         max_time_diff_sec: Максимальная разница во времени между репликами (по умолчанию 300 сек).
-        max_words: Максимальная длина реплики-реакции для обогащения (по умолчанию 6 слов).
+        max_words: Максимальная длина реплики-реакции для обогащения (по умолчанию 12 слов).
         return_reaction_flags: Если True, возвращает кортеж (enriched_text, is_reaction).
+        lookback_window: Глубина окна поиска предыдущих сообщений (по умолчанию 3).
 
     Returns:
         pd.Series обогащенных текстов в исходном порядке строк df (или кортеж Series).
@@ -284,32 +319,41 @@ def enrich_chat_context(
         return res
 
     work_df = df[["chat_id", "timestamp", "text"]].copy()
-    work_df["_orig_idx"] = work_df.index
-    work_df = work_df.sort_values(["chat_id", "timestamp"]).reset_index(drop=True)
-    work_df["prev_text"] = work_df.groupby("chat_id")["text"].shift(1)
-
-    timestamps = pd.to_datetime(work_df["timestamp"], errors="coerce")
-    prev_timestamps = work_df.groupby("chat_id")["timestamp"].shift(1)
-    prev_timestamps = pd.to_datetime(prev_timestamps, errors="coerce")
-    work_df["time_diff_sec"] = (timestamps - prev_timestamps).dt.total_seconds()
+    work_df["_orig_idx"] = np.arange(len(work_df))
+    work_df["ts"] = pd.to_datetime(work_df["timestamp"], errors="coerce")
+    work_df = work_df.sort_values(["chat_id", "ts"]).reset_index(drop=True)
 
     enriched = []
     is_reaction = []
-    for idx, row in work_df.iterrows():
-        curr = str(row["text"]).strip() if pd.notna(row["text"]) else ""
-        prev = str(row["prev_text"]).strip() if pd.notna(row["prev_text"]) else ""
-        dt = row["time_diff_sec"]
+    for i in range(len(work_df)):
+        curr = str(work_df.loc[i, "text"]).strip() if pd.notna(work_df.loc[i, "text"]) else ""
+        curr_ts = work_df.loc[i, "ts"]
+        curr_chat = work_df.loc[i, "chat_id"]
 
-        flag = (
-            bool(prev)
-            and pd.notna(dt)
-            and dt < max_time_diff_sec
-            and is_context_reaction(curr, max_words=max_words)
-        )
-        is_reaction.append(flag)
-        if flag:
-            enriched.append(f"{curr} [Контекст: {prev}]")
+        is_react = is_context_reaction(curr, max_words=max_words)
+        found_prev = None
+
+        if is_react and pd.notna(curr_ts):
+            for step in range(1, lookback_window + 1):
+                prev_i = i - step
+                if prev_i < 0 or work_df.loc[prev_i, "chat_id"] != curr_chat:
+                    break
+                prev_ts = work_df.loc[prev_i, "ts"]
+                if pd.isna(prev_ts):
+                    break
+                dt = (curr_ts - prev_ts).total_seconds()
+                if dt < 0 or dt > max_time_diff_sec:
+                    break
+                prev_cand = str(work_df.loc[prev_i, "text"]).strip() if pd.notna(work_df.loc[prev_i, "text"]) else ""
+                if prev_cand:
+                    found_prev = prev_cand
+                    break
+
+        if found_prev:
+            is_reaction.append(True)
+            enriched.append(f"{curr} [Контекст: {found_prev}]")
         else:
+            is_reaction.append(is_react)
             enriched.append(curr)
 
     work_df["enriched_text"] = enriched

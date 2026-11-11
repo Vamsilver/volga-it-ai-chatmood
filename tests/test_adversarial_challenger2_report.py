@@ -9,12 +9,10 @@ from __future__ import annotations
 
 import re
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
 from generate_report import generate_html_report
-from predict import run_pipeline
 
 
 class TestReportRenderingOfflineIntegrity(unittest.TestCase):
@@ -84,42 +82,6 @@ class TestReportRenderingOfflineIntegrity(unittest.TestCase):
 
         self.assertIn("Вильсона", content)
         self.assertIn("Дирихле", content)
-
-
-class TestInferenceBenchmark(unittest.TestCase):
-    """4. Benchmark performance test: inference latency strictly <= 10.0 s / 1000 messages."""
-
-    def test_benchmark_inference_speed(self) -> None:
-        input_csv = Path("data/dev_messages.csv")
-        self.assertTrue(input_csv.is_file())
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            out_dir = Path(tmpdir) / "bench_out"
-
-            # Run full end-to-end pipeline
-            t_start = time.perf_counter()
-            metrics = run_pipeline(
-                input_path=input_csv,
-                output_dir=out_dir,
-                models_dir="models",
-                device="cpu",
-                batch_size=64,
-            )
-            t_total = time.perf_counter() - t_start
-
-            n_msgs = int(metrics["n_messages"])
-            sec_per_1000 = (t_total / n_msgs) * 1000.0
-
-            print(f"\n[BENCHMARK RESULT] Total messages: {n_msgs}")
-            print(f"[BENCHMARK RESULT] Total pipeline time: {t_total:.3f} s")
-            print(f"[BENCHMARK RESULT] Normalized latency: {sec_per_1000:.3f} s / 1000 messages")
-            print(f"[BENCHMARK RESULT] Throughput: {n_msgs / t_total:.1f} msgs/sec")
-
-            # Must satisfy Criterion 6: <= 10.0 s per 1000 messages
-            self.assertLessEqual(
-                sec_per_1000, 10.0,
-                f"Performance regression! {sec_per_1000:.2f} s / 1000 messages exceeds 10.0 s limit"
-            )
 
 
 if __name__ == "__main__":

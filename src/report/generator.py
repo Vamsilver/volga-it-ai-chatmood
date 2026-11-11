@@ -17,13 +17,46 @@ from src.report.charts import (
 from src.report.confidence import calculate_confidence_kpi
 
 TOPIC_KEYWORDS: dict[str, list[str]] = {
-    "вода": ["вода", "горяч", "холодн", "напор", "давлен", "кипяток", "кран", "протеч"],
-    "лифт": ["лифт", "застрял", "грузов", "кнопк", "шахт"],
-    "уборка / мусор": ["мусор", "гряз", "уборк", "вонь", "таракан", "контейнер", "баки"],
-    "шум / соседи": ["шум", "перфоратор", "сосед", "крик", "музык", "дрель", "ноч", "спать"],
-    "парковка / авто": ["парковк", "машин", "авто", "место", "газон", "шлагбаум"],
-    "отопление": ["отоплен", "батаре", "холод", "мерзн", "тепло"],
-    "УК / диспетчер": ["ук", "управляющ", "диспетчер", "плат", "квитанц", "тариф", "заявк"],
+    "вода / водоснабжение": [
+        "вода", "горяч", "холодн", "напор", "давлен", "кипяток", "кран",
+        "гвс", "хвс", "водоснабжен", "пересох", "шланг", "колонк", "подмес",
+    ],
+    "лифт": [
+        "лифт", "застрял", "грузов", "кнопк", "шахт", "лебедк", "пассажирск",
+        "трос", "кабин", "застряли", "грузовой",
+    ],
+    "уборка / мусор / пухто": [
+        "мусор", "гряз", "уборк", "вонь", "таракан", "контейнер", "баки",
+        "пухто", "свалк", "крыс", "помойк", "клининг", "пакет", "антисанитар",
+    ],
+    "шум / тишина / соседи": [
+        "шум", "перфоратор", "сосед", "крик", "музык", "дрель", "ноч",
+        "спать", "топот", "дебош", "тишин", "сверл", "басы", "лай",
+    ],
+    "парковка / авто / проезд": [
+        "парковк", "машин", "авто", "место", "газон", "поребрик", "блокиров",
+        "проезд", "парковат", "эвакуатор", "колес", "тротуар",
+    ],
+    "отопление / теплоноситель": [
+        "отоплен", "батаре", "холод", "мерзн", "тепло", "теплоносител",
+        "гребенк", "развоздуш", "стояк холодн", "ледян", "замерза",
+    ],
+    "УК / диспетчер / заявки": [
+        "ук", "управляющ", "диспетчер", "плат", "квитанц", "тариф", "заявк",
+        "еирц", "адс", "квадо", "бухгалтер", "перерасчет", "жск", "тсн", "уо",
+    ],
+    "кровля / фасад / протечки": [
+        "протеч", "затоп", "залил", "капает", "потолок", "крыш", "кровл",
+        "фанов", "стояк", "стык", "герметиз", "фасад", "балкон", "козырек", "отмостк", "шов",
+    ],
+    "электрика / освещение": [
+        "свет", "электрич", "лампочк", "лампа", "щиток", "проводк", "автомат",
+        "фонар", "освещен", "плафон", "выбило", "напряжен", "электроэнерг",
+    ],
+    "безопасность / домофон / шлагбаум": [
+        "домофон", "калитка", "замок", "дверь", "магнит", "взлом", "камер",
+        "видеонаблюден", "охрана", "ключ", "шлагбаум", "код", "таблетк", "доводчик",
+    ],
 }
 
 
@@ -37,11 +70,32 @@ def load_report_datasets(
     daily_df = pd.read_csv(p_dir / "chat_daily.csv", sep=";")
     preds_df = pd.read_csv(p_dir / "messages_pred.csv", sep=";")
 
-    if messages_path and Path(messages_path).is_file():
-        msgs_raw = pd.read_csv(messages_path, sep=";", encoding="utf-8")
-        merged = msgs_raw.merge(preds_df, on="message_id", how="left")
-    else:
-        merged = preds_df
+    raw_found = False
+    candidates: list[Path] = []
+    if messages_path:
+        candidates.append(Path(messages_path))
+    candidates.extend([
+        Path("data/dev_messages.csv"),
+        Path("data/test_messages.csv"),
+        p_dir / "dev_messages.csv",
+        p_dir / "messages.csv",
+    ])
+
+    merged = preds_df.copy()
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                msgs_raw = pd.read_csv(cand, sep=";", encoding="utf-8")
+                merged = msgs_raw.merge(preds_df, on="message_id", how="left")
+                raw_found = True
+                break
+            except Exception:
+                continue
+
+    # Безопасная инициализация отсутствующих текстовых/идентификационных колонок
+    for col in ["text", "chat_id", "timestamp"]:
+        if col not in merged.columns:
+            merged[col] = ""
 
     return summary_df, daily_df, merged
 
@@ -92,15 +146,35 @@ def calculate_report_kpi(
     }
 
 
-def _extract_day_quotes(day_msgs: pd.DataFrame) -> list[dict[str, Any]]:
+def _extract_day_quotes(day_msgs: pd.DataFrame, max_quotes: int = 3) -> list[dict[str, Any]]:
     """Извлечение цитат наиболее острых реплик жителей за день."""
-    quotes = []
-    agg_subset = day_msgs[day_msgs["aggression"] == 1]
-    candidates = agg_subset if not agg_subset.empty else day_msgs[day_msgs["sentiment"] == "negative"]
+    quotes: list[dict[str, Any]] = []
+    if day_msgs.empty or "text" not in day_msgs.columns:
+        return quotes
 
-    for _, q_row in candidates.head(3).iterrows():
+    sentiment_col = day_msgs.get("sentiment", pd.Series(dtype=object))
+    aggression_col = day_msgs.get("aggression", pd.Series(dtype=int))
+    conflict_sub = day_msgs[(sentiment_col == "negative") | (aggression_col == 1)].copy()
+    if conflict_sub.empty:
+        return quotes
+
+    def _quote_score(row: pd.Series) -> float:
+        text = str(row.get("text", "")).strip()
+        score = 10.0 if row.get("aggression", 0) == 1 else 3.0
+        # Бонус за информативность длины: предпочтение развернутым описаниям аварии перед односложными "+1"
+        score += min(len(text) / 20.0, 5.0)
+        # Бонус за эмоциональную пунктуацию и маркеры возмущения
+        if any(mark in text for mark in ["!", "?", "😡", "🤬", "руко", "авария", "срочно"]):
+            score += 2.0
+        return score
+
+    conflict_sub["_score"] = conflict_sub.apply(_quote_score, axis=1)
+    top_candidates = conflict_sub.sort_values(by="_score", ascending=False).head(max_quotes)
+
+    for _, q_row in top_candidates.iterrows():
         raw_text = str(q_row.get("text", "")).replace("\n", " ").strip()
-        text_clean = (raw_text[:147] + "...") if len(raw_text) > 150 else raw_text
+        # Сохранение verbatim-цитаты до 280 символов без преждевременного усечения
+        text_clean = (raw_text[:277] + "...") if len(raw_text) > 280 else raw_text
         quotes.append({
             "text": text_clean,
             "sentiment": q_row.get("sentiment", "negative"),
@@ -111,9 +185,16 @@ def _extract_day_quotes(day_msgs: pd.DataFrame) -> list[dict[str, Any]]:
 
 def _detect_topics(day_msgs: pd.DataFrame) -> list[str]:
     """Определение ключевых ЖКХ-тем в потоке сообщений дня."""
-    if "text" not in day_msgs.columns:
+    if day_msgs.empty or "text" not in day_msgs.columns:
         return ["Конфликт в чате"]
-    corpus = " ".join(day_msgs["text"].dropna().astype(str).tolist()).lower()
+
+    # Фильтруем конфликтное подмножество: только негативные или агрессивные сообщения
+    sentiment_col = day_msgs.get("sentiment", pd.Series(dtype=object))
+    aggression_col = day_msgs.get("aggression", pd.Series(dtype=int))
+    conflict_sub = day_msgs[(sentiment_col == "negative") | (aggression_col == 1)]
+    target_df = conflict_sub if not conflict_sub.empty else day_msgs
+
+    corpus = " ".join(target_df["text"].dropna().astype(str).tolist()).lower()
     topics = [t for t, words in TOPIC_KEYWORDS.items() if any(w in corpus for w in words)]
     return topics if topics else ["Общее недовольство"]
 

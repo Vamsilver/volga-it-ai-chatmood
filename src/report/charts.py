@@ -98,6 +98,35 @@ def build_mood_dynamics_figure(daily_df: pd.DataFrame) -> go.Figure:
         color = colors[idx % len(colors)]
         fig.add_trace(_build_chat_scatter_trace(str(chat_id), group, color))
 
+        low_group = group[group["is_low_volume"]]
+        if not low_group.empty:
+            # Опорная верхняя граница ДИ для Plotly fill='tonexty'
+            fig.add_trace(
+                go.Scatter(
+                    x=low_group["date"],
+                    y=low_group["mood_ci_upper"],
+                    mode="lines",
+                    line=dict(width=0, color="rgba(0,0,0,0)"),
+                    showlegend=False,
+                    hoverinfo="skip",
+                    name=f"95% ДИ Верх (Чат {chat_id})",
+                )
+            )
+            # Полупрозрачная лента неопределенности ДИ Дирихле для дней с n < 5
+            fig.add_trace(
+                go.Scatter(
+                    x=low_group["date"],
+                    y=low_group["mood_ci_lower"],
+                    mode="lines",
+                    line=dict(width=0, color="rgba(0,0,0,0)"),
+                    fill="tonexty",
+                    fillcolor="rgba(59, 130, 246, 0.15)",
+                    showlegend=False,
+                    hoverinfo="skip",
+                    name=f"95% ДИ Неопределенность (Чат {chat_id})",
+                )
+            )
+
     fig.update_layout(
         title=dict(
             text="<b>Динамика индекса настроения жителей по дням</b><br><span style='font-size:12px;color:#64748b;'>Сплошные маркеры: n ≥ 5 · Полые маркеры (◯): малый объём (n &lt; 5, повышена дисперсия) · Тултип: 95% ДИ Вильсона и Дирихле</span>",

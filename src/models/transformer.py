@@ -109,12 +109,14 @@ class TransformerPipeline:
         if not HAS_TORCH:
             raise RuntimeError("Для загрузки требуется torch и transformers")
 
-        path = Path(model_dir)
-        tokenizer = AutoTokenizer.from_pretrained(path)
+        path = Path(model_dir).resolve()
+        is_local_dir = (path / "config.json").is_file()
+        tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=is_local_dir)
         with open(path / "config_multitask.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
 
-        model = MultiTaskRuBertTiny(model_name=cfg.get("model_name", "cointegrated/rubert-tiny2"))
+        local_model = str(path) if is_local_dir else cfg.get("model_name", "cointegrated/rubert-tiny2")
+        model = MultiTaskRuBertTiny(model_name=local_model)
         weights_path = path / "model_weights.pt"
         model.load_state_dict(torch.load(weights_path, map_location=device))
         model.train(False)

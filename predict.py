@@ -115,6 +115,11 @@ def load_prediction_model(
 ) -> EnsembleClassifier | BaselineClassifier:
     """Загрузка ансамбля или бейслайна из локальной директории весов с опцией INT8-квантизации."""
     m_dir = Path(models_dir)
+    if not m_dir.is_dir():
+        fallback_m = Path(__file__).resolve().parent / models_dir
+        if fallback_m.is_dir():
+            m_dir = fallback_m
+
     baseline_path = m_dir / "baseline.joblib"
     transformer_dir = m_dir / "rubert_tiny2_multitask"
 
@@ -130,20 +135,26 @@ def load_prediction_model(
                 device=device,
             )
         except Exception:
-            model = EnsembleClassifier.from_pretrained(
-                baseline_path=baseline_path,
-                transformer_dir=transformer_dir,
-                device="cpu",
-            )
+            try:
+                model = EnsembleClassifier.from_pretrained(
+                    baseline_path=baseline_path,
+                    transformer_dir=transformer_dir,
+                    device="cpu",
+                )
+            except Exception:
+                model = BaselineClassifier.load(baseline_path)
 
         # Динамическая квантизация INT8 при запросе или работе на слабых CPU
         if quantize_int8 and getattr(model, "transformer", None) is not None:
-            import torch
-            t_model = model.transformer.model
-            if t_model is not None:
-                model.transformer.model = torch.quantization.quantize_dynamic(
-                    t_model, {torch.nn.Linear}, dtype=torch.qint8
-                )
+            try:
+                import torch
+                t_model = model.transformer.model
+                if t_model is not None:
+                    model.transformer.model = torch.quantization.quantize_dynamic(
+                        t_model, {torch.nn.Linear}, dtype=torch.qint8
+                    )
+            except Exception as q_err:
+                sys.stderr.write(f"Квантизация пропущена: {q_err}\n")
         return model
 
     # Запасной режим быстрого бейслайна
@@ -246,6 +257,7 @@ def main() -> None:
             batch_size=args.batch_size,
             quantize_int8=args.quantize_int8,
         )
+        sys.exit(0)
     except Exception as err:
         sys.stderr.write(f"ОШИБКА ВЫПОЛНЕНИЯ ПАЙПЛАЙНА: {err}\n")
         sys.exit(1)
