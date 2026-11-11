@@ -129,7 +129,15 @@ def train(
     if not HAS_TORCH:
         raise RuntimeError("Для обучения требуются torch и transformers")
 
-    device = torch.device(device_name if torch.cuda.is_available() and device_name == "cuda" else "cpu")
+    if device_name == "cuda" and torch.cuda.is_available():
+        try:
+            torch.zeros(1, device="cuda")
+            device = torch.device("cuda")
+        except Exception:
+            print("[!] CUDA недоступна для текущих ядер PyTorch (sm_120). Автоматически переключаемся на CPU.")
+            device = torch.device("cpu")
+    else:
+        device = torch.device("cpu")
     print(f"[*] Используемое устройство: {device}")
 
     model_name = "cointegrated/rubert-tiny2"
