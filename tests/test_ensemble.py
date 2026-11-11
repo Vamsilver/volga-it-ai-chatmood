@@ -156,6 +156,23 @@ class TestEnsembleClassifier(unittest.TestCase):
         self.assertEqual(preds.iloc[0]["sentiment"], "neutral")
         self.assertEqual(preds.iloc[1]["is_service"], 0)
 
+    def test_sarcasm_and_emoji_override(self):
+        """Проверка оверрайдов для сарказма и одиночных эмодзи (Milestone 8.3)."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        test_msgs = [
+            "🤡",
+            "👍 🙏",
+            "Спасибо за отопление, которого нет 2 дня",
+            "Зато в подъезде тепло 😡",
+        ]
+        preds = ensemble.predict(test_msgs)
+        self.assertEqual(preds.iloc[0]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[1]["sentiment"], "positive")
+        self.assertEqual(preds.iloc[2]["sentiment"], "negative")
+        self.assertEqual(preds.iloc[3]["sentiment"], "negative")
+
 
 if __name__ == "__main__":
     unittest.main()

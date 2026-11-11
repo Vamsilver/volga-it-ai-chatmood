@@ -80,6 +80,19 @@ RESIDENT_NOT_SERVICE_PATTERNS = [
     ),
 ]
 
+# Паттерны сарказма и ироничных псевдо-благодарностей (sentiment -> negative)
+SARCASM_STRONG_PATTERNS = [
+    re.compile(r"спасибо\s+за[^.!?\n]{1,50}(?:нет|не\s+работает|сломал|ледян|грязн|холодн|отключ)", re.IGNORECASE),
+    re.compile(r"зато\s+[^.!?\n]{1,50}[😡🤬🤦🤮👿💩😠💢👎💔]", re.IGNORECASE),
+    re.compile(r"наш\s+любимый\s+[^.!?\n]{1,30}\)+", re.IGNORECASE),
+    re.compile(r"наша\s+ук\s+нас\s+береж[а-яё]+", re.IGNORECASE),
+    re.compile(r"сэкономили\)+", re.IGNORECASE),
+    re.compile(r"ну\s+естественно\s*[\U0001f609\)]+", re.IGNORECASE),
+]
+
+STANDALONE_NEG_EMOJIS = re.compile(r"^[😡🤬🤦🤮👿💩😠💢👎💔🤡😒😱\s!]+$")
+STANDALONE_POS_EMOJIS = re.compile(r"^[👍🙏👌👏🎉🌸❤️😀😁😃🤝\s!]+$")
+
 
 class EnsembleClassifier:
     """Ансамбль классификаторов с взвешенным голосованием и обработкой хардкейсов."""
@@ -263,14 +276,19 @@ class EnsembleClassifier:
         pred_sent = np.array([REV_SENTIMENT_MAP[idx] for idx in sent_indices], dtype=object)
         pred_agg = (probs["aggression"] >= self.aggression_threshold).astype(int)
 
-        # Hard-rule override: прямые личные оскорбления и явные угрозы
-        # Принудительно переводят тональность в negative и выставляют aggression = 1
+        # Hard-rule overrides: прямые оскорбления, угрозы, сарказм и автономные эмодзи
         for i, text in enumerate(texts):
             if pred_svc[i] == 0:
-                t = str(text) if pd.notna(text) else ""
+                t = str(text).strip() if pd.notna(text) else ""
                 if any(p.search(t) for p in INSULT_OVERRIDE_PATTERNS):
                     pred_sent[i] = "negative"
                     pred_agg[i] = 1
+                elif STANDALONE_NEG_EMOJIS.match(t):
+                    pred_sent[i] = "negative"
+                elif STANDALONE_POS_EMOJIS.match(t):
+                    pred_sent[i] = "positive"
+                elif any(p.search(t) for p in SARCASM_STRONG_PATTERNS):
+                    pred_sent[i] = "negative"
 
         # Соблюдение жестких инвариантов разметки
         pred_sent, pred_agg = self._apply_invariants(pred_svc, pred_sent, pred_agg)
