@@ -77,6 +77,11 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default=64,
         help="Размер батча для инференса трансформера (по умолчанию: 64)",
     )
+    parser.add_argument(
+        "--quantize-int8",
+        action="store_true",
+        help="Применить динамическую INT8-квантизацию линейных слоев для экономии памяти на CPU",
+    )
     return parser.parse_args(args)
 
 
@@ -106,8 +111,9 @@ def load_input_messages(filepath: str | Path) -> pd.DataFrame:
 def load_prediction_model(
     models_dir: str | Path,
     device: str = "cpu",
+    quantize_int8: bool = False,
 ) -> EnsembleClassifier | BaselineClassifier:
-    """Загрузка ансамбля или бейслайна из локальной директории весов."""
+    """Загрузка ансамбля или бейслайна из локальной директории весов с опцией INT8-квантизации."""
     m_dir = Path(models_dir)
     baseline_path = m_dir / "baseline.joblib"
     transformer_dir = m_dir / "rubert_tiny2_multitask"
@@ -115,19 +121,30 @@ def load_prediction_model(
     if not baseline_path.is_file():
         raise FileNotFoundError(f"Веса бейслайна не найдены: {baseline_path}")
 
+    model: EnsembleClassifier | BaselineClassifier
     if transformer_dir.is_dir():
         try:
-            return EnsembleClassifier.from_pretrained(
+            model = EnsembleClassifier.from_pretrained(
                 baseline_path=baseline_path,
                 transformer_dir=transformer_dir,
                 device=device,
             )
         except Exception:
-            return EnsembleClassifier.from_pretrained(
+            model = EnsembleClassifier.from_pretrained(
                 baseline_path=baseline_path,
                 transformer_dir=transformer_dir,
                 device="cpu",
             )
+
+        # Динамическая квантизация INT8 при запросе или работе на слабых CPU
+        if quantize_int8 and getattr(model, "transformer", None) is not None:
+            import torch
+            t_model = model.transformer.model
+            if t_model is not None:
+                model.transformer.model = torch.quantization.quantize_dynamic(
+                    t_model, {torch.nn.Linear}, dtype=torch.qint8
+                )
+        return model
 
     # Запасной режим быстрого бейслайна
     return BaselineClassifier.load(baseline_path)
@@ -139,8 +156,9 @@ def run_pipeline(
     models_dir: str | Path = "models",
     device: str = "cpu",
     batch_size: int = 64,
+    quantize_int8: bool = False,
 ) -> dict[str, str | int | float]:
-    """Выполнение полного сквозного цикла обработки данных."""
+    """Выполнение полного сквозного цикла обработки данных с контролем скорости."""
     t_start = time.time()
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -150,12 +168,16 @@ def run_pipeline(
     messages_df = load_input_messages(input_path)
     t_load_data = time.time() - t0
 
-    # 2. Инициализация моделей
+    # 2. Инициализация моделей (с опциональной INT8-квантизацией)
     t0 = time.time()
-    model = load_prediction_model(models_dir=models_dir, device=device)
+    model = load_prediction_model(
+        models_dir=models_dir,
+        device=device,
+        quantize_int8=quantize_int8,
+    )
     t_load_model = time.time() - t0
 
-    # 3. Классификация сообщений (is_service, sentiment, aggression)
+    # 3. Батч-инференс классификации (is_service, sentiment, aggression)
     t0 = time.time()
     preds_df = model.predict_messages(messages_df)
     t_pred = time.time() - t0
@@ -183,12 +205,14 @@ def run_pipeline(
     total_time = time.time() - t_start
     n_msgs = len(messages_df)
     throughput = n_msgs / max(total_time, 1e-6)
+    sec_per_1000 = (total_time / max(n_msgs, 1)) * 1000
 
     print("=" * 65)
     print("  УСПЕШНО ВЫПОЛНЕН ПАЙПЛАЙН АНАЛИЗА ДОМОВЫХ ЧАТОВ (Волга-IT 2026) ")
     print("=" * 65)
     print(f"Обработано сообщений:      {n_msgs}")
     print(f"Общее время работы:        {total_time:.2f} сек ({throughput:.1f} сообщ./сек)")
+    print(f"Скорость (Критерий 6):     {sec_per_1000:.2f} сек / 1000 сообщений (норма: <= 10.0 сек)")
     print(f"  - Загрузка данных:       {t_load_data:.3f} сек")
     print(f"  - Загрузка моделей:      {t_load_model:.3f} сек")
     print(f"  - Инференс классификации:{t_pred:.3f} сек")
@@ -203,6 +227,7 @@ def run_pipeline(
         "n_messages": n_msgs,
         "total_time": round(total_time, 3),
         "throughput": round(throughput, 1),
+        "sec_per_1000": round(sec_per_1000, 2),
         "messages_path": str(p_messages),
         "daily_path": str(p_daily),
         "summary_path": str(p_summary),
@@ -219,6 +244,7 @@ def main() -> None:
             models_dir=args.models_dir,
             device=args.device,
             batch_size=args.batch_size,
+            quantize_int8=args.quantize_int8,
         )
     except Exception as err:
         sys.stderr.write(f"ОШИБКА ВЫПОЛНЕНИЯ ПАЙПЛАЙНА: {err}\n")
