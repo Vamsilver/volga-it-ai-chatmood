@@ -35,3 +35,6 @@ participants/
 
 # PDF-Р·Р°РґР°РЅРёРµ
 *.pdf
+
+# Пояснительная записка (дублирует Раздел 4 README)
+EXPLANATORY_NOTE.md

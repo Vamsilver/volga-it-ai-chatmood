@@ -196,9 +196,9 @@ class TestEnsembleClassifier(unittest.TestCase):
             self.assertEqual(preds.iloc[i]["aggression"], 0)
 
     def test_aggression_threshold_calibration(self):
-        """Проверка калибровки порога детекции агрессии (0.78)."""
+        """Проверка калибровки порога детекции агрессии (0.70)."""
         ensemble = EnsembleClassifier()
-        self.assertEqual(ensemble.aggression_threshold, 0.78)
+        self.assertEqual(ensemble.aggression_threshold, 0.70)
 
     def test_extended_insult_overrides(self):
         """Проверка расширенных паттернов оскорблений и личных выпадов."""
