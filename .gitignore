@@ -2,3 +2,36 @@
 # AI internal operational context (doc-craft & graphify)
 .context/
 graphify-out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+.env
+.venv/
+venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Models (большие бинарники — загружаем отдельно или через облако)
+models/
+
+# Dev outputs (результаты прогона — не в git)
+dev_out/
+
+# Временные файлы
+*.gitkeep
+*.tmp
+*.log
+
+# Архив организаторов
+participants.zip
+participants/
+
+# PDF-задание
+*.pdf
