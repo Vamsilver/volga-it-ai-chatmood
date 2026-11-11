@@ -142,6 +142,20 @@ class TestEnsembleClassifier(unittest.TestCase):
         self.assertEqual(preds.iloc[1]["sentiment"], "negative")
         self.assertEqual(preds.iloc[1]["aggression"], 1)
 
+    def test_service_override(self):
+        """Проверка детекции служебных рассылок и исключений обращений жителей."""
+        ensemble = EnsembleClassifier()
+        ensemble.fit(self.texts, self.is_service, self.sentiment, self.aggression)
+
+        test_msgs = [
+            "Счета за июнь уже доступны в приложении Госуслуги Дом. Оплачивайте вовремя!",
+            "Уважаемый представитель УК! Когда наконец починят домофон в 3 подъезде?",
+        ]
+        preds = ensemble.predict(test_msgs)
+        self.assertEqual(preds.iloc[0]["is_service"], 1)
+        self.assertEqual(preds.iloc[0]["sentiment"], "neutral")
+        self.assertEqual(preds.iloc[1]["is_service"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

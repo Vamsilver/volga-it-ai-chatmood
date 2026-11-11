@@ -50,6 +50,36 @@ INSULT_OVERRIDE_PATTERNS = [
     ),
 ]
 
+# Паттерны официальных рассылок УК и Госуслуг (is_service = 1)
+SERVICE_STRONG_PATTERNS = [
+    re.compile(r"госуслуги\s+дом", re.IGNORECASE),
+    re.compile(r"счета\s+за\s+[а-яё]+\s+уже\s+доступны", re.IGNORECASE),
+    re.compile(r"уважаемые\s+жители", re.IGNORECASE),
+    re.compile(r"уважаемые\s+собственники", re.IGNORECASE),
+    re.compile(r"аварийно-восстановительн", re.IGNORECASE),
+    re.compile(r"лифт\s+остановлен\s+на\s+ремонт", re.IGNORECASE),
+    re.compile(r"треб(?:уется)?\s+доступ\s+в\s+\[квартира\]", re.IGNORECASE),
+    re.compile(r"график\s+отключения", re.IGNORECASE),
+    re.compile(r"плановое\s+отключение", re.IGNORECASE),
+    re.compile(r"гидравлические\s+испытания", re.IGNORECASE),
+    re.compile(r"поверка\s+(?:счетчиков|ипу|одпу)", re.IGNORECASE),
+    re.compile(r"официальное\s+уведомление", re.IGNORECASE),
+    re.compile(r"прием\s+граждан", re.IGNORECASE),
+    re.compile(r"информируем\s+вас", re.IGNORECASE),
+]
+
+# Паттерны обращений жителей, ошибочно похожих на служебные (is_service = 0)
+RESIDENT_NOT_SERVICE_PATTERNS = [
+    re.compile(r"уважаемый\s+представитель\s+ук", re.IGNORECASE),
+    re.compile(r"\bсоседи[,!?\s]", re.IGNORECASE),
+    re.compile(
+        r"(?:в\s+личку|мне\s+в\s+лс|дозвониться\s+не|оставил[а-яё]*\s+заявк|"
+        r"прошу\s+оперативно|кто\s+потерял|чей\s+(?:кот|пес|велосипед|ключ)|"
+        r"чья\s+машина|у\s+всех\s+(?:есть|нет))",
+        re.IGNORECASE,
+    ),
+]
+
 
 class EnsembleClassifier:
     """Ансамбль классификаторов с взвешенным голосованием и обработкой хардкейсов."""
@@ -63,6 +93,7 @@ class EnsembleClassifier:
         weight_sentiment: float = 0.45,
         weight_aggression: float = 0.50,
         aggression_threshold: float = 0.65,
+        service_threshold: float = 0.70,
         obscene_sent_boost: float = 0.20,
         obscene_agg_boost: float = 0.15,
     ) -> None:
@@ -76,6 +107,7 @@ class EnsembleClassifier:
             weight_sentiment: Вес трансформера для задачи sentiment.
             weight_aggression: Вес трансформера для задачи aggression.
             aggression_threshold: Порог вероятности для бинарной детекции агрессии.
+            service_threshold: Порог вероятности для бинарной детекции служебных сообщений.
             obscene_sent_boost: Добавка к вероятности негатива при наличии мата.
             obscene_agg_boost: Добавка к вероятности агрессии при наличии мата.
         """
@@ -86,6 +118,7 @@ class EnsembleClassifier:
         self.weight_sentiment = float(weight_sentiment)
         self.weight_aggression = float(weight_aggression)
         self.aggression_threshold = float(aggression_threshold)
+        self.service_threshold = float(service_threshold)
         self.obscene_sent_boost = float(obscene_sent_boost)
         self.obscene_agg_boost = float(obscene_agg_boost)
 
@@ -216,7 +249,16 @@ class EnsembleClassifier:
         """Предсказание меток с гарантированным соблюдением инвариантов."""
         probs = self.predict_proba(texts)
 
-        pred_svc = (probs["service"] >= 0.5).astype(int)
+        pred_svc = (probs["service"] >= self.service_threshold).astype(int)
+
+        # Доменная калибровка служебных рассылок и исключений обращений жителей
+        for i, text in enumerate(texts):
+            t = str(text) if pd.notna(text) else ""
+            if any(p.search(t) for p in RESIDENT_NOT_SERVICE_PATTERNS):
+                pred_svc[i] = 0
+            elif any(p.search(t) for p in SERVICE_STRONG_PATTERNS):
+                pred_svc[i] = 1
+
         sent_indices = np.argmax(probs["sentiment"], axis=1)
         pred_sent = np.array([REV_SENTIMENT_MAP[idx] for idx in sent_indices], dtype=object)
         pred_agg = (probs["aggression"] >= self.aggression_threshold).astype(int)
