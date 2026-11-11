@@ -23,6 +23,7 @@ from sklearn.metrics import f1_score
 from sklearn.pipeline import FeatureUnion
 
 from src.data.loader import get_chat_group_splits
+from src.features.preprocessor import enrich_chat_context
 
 
 class BaselineClassifier:
@@ -187,7 +188,11 @@ class BaselineClassifier:
         if "text" not in messages_df.columns:
             raise ValueError("Входной DataFrame должен содержать колонку 'text'")
 
-        preds = self.predict(messages_df["text"])
+        texts = messages_df["text"]
+        if "chat_id" in messages_df.columns and "timestamp" in messages_df.columns:
+            texts = enrich_chat_context(messages_df)
+
+        preds = self.predict(texts)
         preds.insert(0, "message_id", messages_df["message_id"].to_numpy())
         return preds
 

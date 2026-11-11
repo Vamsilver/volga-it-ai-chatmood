@@ -25,7 +25,7 @@ import pandas as pd
 
 import re
 
-from src.features.preprocessor import TextPreprocessor
+from src.features.preprocessor import TextPreprocessor, enrich_chat_context
 from src.models.baseline import BaselineClassifier
 from src.models.transformer import HAS_TORCH, REV_SENTIMENT_MAP, TransformerPipeline
 
@@ -306,7 +306,11 @@ class EnsembleClassifier:
         if "text" not in messages_df.columns:
             raise ValueError("Входной DataFrame должен содержать колонку 'text'")
 
-        preds = self.predict(messages_df["text"])
+        texts = messages_df["text"]
+        if "chat_id" in messages_df.columns and "timestamp" in messages_df.columns:
+            texts = enrich_chat_context(messages_df)
+
+        preds = self.predict(texts)
         preds.insert(0, "message_id", messages_df["message_id"].to_numpy())
         return preds
 
